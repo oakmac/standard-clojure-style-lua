@@ -1120,7 +1120,15 @@ local function isTagNode(n)
 end
 
 local function isStringNode(n)
-  return n.name == "string"
+  return n
+    and n.name == "string"
+    and isArray(n.children)
+    and arraySize(n.children) == 3
+    and n.children[2].name == ".body"
+end
+
+local function getTextFromStringNode(n)
+  return n.children[2].text
 end
 
 local function isCommentNode(n)
@@ -2209,10 +2217,7 @@ local function parseNs(nodesArr)
       and not insideNsMetadataHashMap
       and isStringNode(node)
     then
-      -- NOTE: this should always be true, but I like being defensive
-      if arraySize(node.children) == 3 and node.children[2].name == ".body" then
-        result.docstring = node.children[2].text
-      end
+      result.docstring = getTextFromStringNode(node)
 
     -- collect :refer-clojure :exclude
     elseif insideReferClojureForm and idx > referClojureNodeIdx and isExcludeKeyword(node) then
@@ -2686,13 +2691,8 @@ local function parseNs(nodesArr)
         result.requires[activeRequireIdx].platform = currentReaderConditionalPlatform
       end
 
-      -- NOTE: this should always be true, but I like being defensive
-      if arraySize(node.children) == 3 and node.children[2].name == ".body" then
-        result.requires[activeRequireIdx].symbol = strConcat3('"', node.children[2].text, '"')
-        result.requires[activeRequireIdx].symbolIsString = true
-      else
-        -- FIXME: throw here?
-      end
+      result.requires[activeRequireIdx].symbol = strConcat3('"', getTextFromStringNode(node), '"')
+      result.requires[activeRequireIdx].symbolIsString = true
 
     -- collect :import packages not inside of a list or vector
     elseif insideImportForm and idx > importNodeIdx and not insideImportPackageList and isTokenNode2 and isTextNode then
@@ -2804,10 +2804,7 @@ local function parseNs(nodesArr)
       and genClassKeyStr == "prefix"
       and isStringNode(node)
     then
-      -- NOTE: this should always be true, but I like being defensive
-      if arraySize(node.children) == 3 and node.children[2].name == ".body" then
-        result.genClass.prefix.value = strConcat3('"', node.children[2].text, '"')
-      end
+      result.genClass.prefix.value = strConcat3('"', getTextFromStringNode(node), '"')
       genClassToggle = 0
       genClassValueLineNo = lineNo
 
