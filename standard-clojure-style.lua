@@ -241,7 +241,7 @@ local function strTrim(s)
 end
 
 local function strStartsWith(s, startStr)
-  return s:sub(1, #startStr) == startStr
+                                                           return s:sub(1, #startStr) == startStr
 end
 
 local function strEndsWith(s, endStr)
