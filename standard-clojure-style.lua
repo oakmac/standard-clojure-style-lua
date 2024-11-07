@@ -451,7 +451,7 @@ local function String(opts)
 end
 
 -- FIXME: rename to "Pattern"
-local function Regex(opts)
+local function Pattern(opts)
   return {
     name = opts.name,
     pattern = opts.pattern,
@@ -832,7 +832,7 @@ end
 parsers.string = Seq({
   name = "string",
   parsers = {
-    Regex({ pattern = '%#?%"', name = ".open" }),
+    Pattern({ pattern = '%#?%"', name = ".open" }),
     -- NOTE: difference from Standard Clojure Style JavaScript here
     Optional({ parse = stringBodyParser }),
     Optional(Char({ char = '"', name = ".close" })),
@@ -863,7 +863,7 @@ local useRegexTokenParser = false
 if useRegexTokenParser then
   parsers.token = Choice({
     parsers = {
-      Regex({
+      Pattern({
         name = "token",
         pattern = "(%#%#)?[^"
           .. tokenHeadPattern
@@ -884,9 +884,9 @@ else
   })
 end
 
-parsers._ws = Regex({ name = "whitespace", pattern = "[" .. whitespacePattern .. "]+" })
+parsers._ws = Pattern({ name = "whitespace", pattern = "[" .. whitespacePattern .. "]+" })
 
-parsers.comment = Regex({ name = "comment", pattern = ";[^\n]*" })
+parsers.comment = Pattern({ name = "comment", pattern = ";[^\n]*" })
 
 parsers.discard = Seq({
   name = "discard",
@@ -905,7 +905,7 @@ parsers.braces = Seq({
         Char({ name = ".open", char = "{" }),
         String({ name = ".open", str = "#{" }),
         String({ name = ".open", str = "#::{" }),
-        Regex({ name = ".open", pattern = "%#%:%:?[a-zA-Z][a-zA-Z0-9%.%-%_]*%{" }),
+        Pattern({ name = ".open", pattern = "%#%:%:?[a-zA-Z][a-zA-Z0-9%.%-%_]*%{" }),
       },
     }),
     Repeat({
@@ -935,10 +935,10 @@ parsers.parens = Seq({
     Choice({
       parsers = {
         Char({ name = ".open", char = "(" }),
-        Regex({ name = ".open", pattern = "%#%?%@%(" }),
-        Regex({ name = ".open", pattern = "%#%?%(" }),
-        Regex({ name = ".open", pattern = "%#%=%(" }),
-        Regex({ name = ".open", pattern = "%#%(" }),
+        Pattern({ name = ".open", pattern = "%#%?%@%(" }),
+        Pattern({ name = ".open", pattern = "%#%?%(" }),
+        Pattern({ name = ".open", pattern = "%#%=%(" }),
+        Pattern({ name = ".open", pattern = "%#%(" }),
       },
     }),
     Repeat({
@@ -958,7 +958,7 @@ parsers.meta = Seq({
       minMatches = 1,
       parser = Seq({
         parsers = {
-          Regex({ name = ".marker", pattern = "%#?%^" }),
+          Pattern({ name = ".marker", pattern = "%#?%^" }),
           Repeat({ parser = "_gap" }),
           Named({ name = ".meta", parser = "_form" }),
           Repeat({ parser = "_gap" }),
@@ -975,8 +975,8 @@ parsers.wrap = Seq({
     -- NOTE: difference from Standard Clojure Style JS here
     Choice({
       parsers = {
-        Regex({ name = ".marker", pattern = "%~%@" }),
-        Regex({ name = ".marker", pattern = "%#%'" }),
+        Pattern({ name = ".marker", pattern = "%~%@" }),
+        Pattern({ name = ".marker", pattern = "%#%'" }),
         Char({ name = ".marker", char = "@" }),
         Char({ name = ".marker", char = "'" }),
         Char({ name = ".marker", char = "`" }),
@@ -1157,7 +1157,6 @@ local function isAnonFnOpener(opener)
 end
 
 local function isReaderConditionalOpener(opener)
-  -- TODO: also check node type here?
   return opener.text == "#?(" or opener.text == "#?@("
 end
 
@@ -1178,8 +1177,6 @@ local function commentNeedsSpaceBefore(lineTxt, nodeTxt)
     and not strEndsWith(lineTxt, "{")
 end
 
--- FIXME: there must be a way to do this with a single regex
--- TODO: make language neutral
 local function commentNeedsSpaceInside(commentTxt)
   return not string.match(commentTxt, "^;+ ") and not string.match(commentTxt, "^;+$")
 end
@@ -2903,7 +2900,7 @@ local function getPlatformsFromArray(arr)
     stackPush(platformsArr, platformStr)
   end)
 
-  table.sort(platformsArr) -- FIXME: abstract to language neutral
+  table.sort(platformsArr)
 
   if hasDefault then
     stackPush(platformsArr, ":default")
@@ -4217,29 +4214,23 @@ local function formatNodes(nodesArr, parsedNs)
   if nsStartStringIdx > 0 then
     local headStr = substr(outTxt, 1, nsStartStringIdx)
 
-    -- print("xxxxxxxx" .. headStr .. "xxxxxxxx")
+    local nsStr = nil
+    local success, result = pcall(function()
+      return formatNs(parsedNs)
+    end)
 
-    -- local nsStr = nil
-    -- local success, result = pcall(function()
-    --   return formatNs(parsedNs)
-    -- end)
-
-    local nsStr = formatNs(parsedNs)
-
-    -- if not success then
-    --   return {
-    --     status = "error",
-    --     reason = result,
-    --   }
-    -- end
-    -- nsStr = result
+    if not success then
+      return {
+        status = "error",
+        reason = result,
+      }
+    end
+    nsStr = result
 
     local tailStr = ""
     if nsEndStringIdx > 0 then
       tailStr = substr(outTxt, inc(inc(nsEndStringIdx)), -1)
     end
-
-    -- print('yyyyyyyyyyyy' .. tailStr .. 'yyyyyyyyyyyy')
 
     outTxt = strConcat3(headStr, nsStr, tailStr)
   end
@@ -4326,7 +4317,7 @@ M._AnyChar = AnyChar
 M._Char = Char
 M._Choice = Choice
 M._NotChar = NotChar
-M._Regex = Regex
+M._Pattern = Pattern
 M._Repeat = Repeat
 M._Seq = Seq
 M._String = String

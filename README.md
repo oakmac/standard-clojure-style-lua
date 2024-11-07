@@ -28,9 +28,8 @@ lua tests.lua
 - [x] parse_ns test cases
 - [x] format test cases
 - [x] set up continuous integration
+- [x] use a Set / Table indices for the special chars lookups
 - [ ] format edge case tests like CRLF and line endings
-- [ ] use a Set / Table indices for the special chars lookups
-  - https://www.lua.org/pil/11.5.html
 - [ ] create a changelog file
 - [ ] figure out a release process / approach
 

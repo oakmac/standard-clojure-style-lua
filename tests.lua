@@ -517,47 +517,37 @@ function testInternals()
   lu.assertEquals(scsLib._substr("abcdef", 4, 6), "de", "internals: _substr test case 3")
   lu.assertEquals(scsLib._substr("abcdef", 3, -1), "cdef", "internals: _substr test case 4")
 
-  -- FIXME: port these
+  lu.assertTrue(scsLib._commentNeedsSpaceBefore("foo", ";bar"))
+  lu.assertTrue(scsLib._commentNeedsSpaceBefore("foo {}", ";bar"))
+  lu.assertFalse(scsLib._commentNeedsSpaceBefore("foo ", ";bar"))
+  lu.assertFalse(scsLib._commentNeedsSpaceBefore("", ";bar"))
+  lu.assertFalse(scsLib._commentNeedsSpaceBefore("foo [", ";bar"))
+  lu.assertFalse(scsLib._commentNeedsSpaceBefore("foo (", ";bar"))
+  lu.assertFalse(scsLib._commentNeedsSpaceBefore("foo {", ";bar"))
 
-  -- test('commentNeedsSpaceBefore', () => {
-  --   expect(scsLib._commentNeedsSpaceBefore('foo', ';bar')).toBe(true)
-  --   expect(scsLib._commentNeedsSpaceBefore('foo {}', ';bar')).toBe(true)
-  --   expect(scsLib._commentNeedsSpaceBefore('foo ', ';bar')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceBefore('', ';bar')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceBefore('foo [', ';bar')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceBefore('foo (', ';bar')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceBefore('foo {', ';bar')).toBe(false)
-  -- })
+  lu.assertTrue(scsLib._commentNeedsSpaceInside(";foo"))
+  lu.assertTrue(scsLib._commentNeedsSpaceInside(";;foo"))
+  lu.assertTrue(scsLib._commentNeedsSpaceInside(";;;;;;;foo"))
+  lu.assertFalse(scsLib._commentNeedsSpaceInside(";; foo"))
+  lu.assertFalse(scsLib._commentNeedsSpaceInside("; foo"))
+  lu.assertFalse(scsLib._commentNeedsSpaceInside(";      foo"))
+  lu.assertFalse(scsLib._commentNeedsSpaceInside(";"))
+  lu.assertFalse(scsLib._commentNeedsSpaceInside(";;"))
+  lu.assertFalse(scsLib._commentNeedsSpaceInside(";;;;;;"))
 
-  -- test('commentNeedsSpaceInside', () => {
-  --   expect(scsLib._commentNeedsSpaceInside(';foo')).toBe(true)
-  --   expect(scsLib._commentNeedsSpaceInside(';;foo')).toBe(true)
-  --   expect(scsLib._commentNeedsSpaceInside(';;;;;;;foo')).toBe(true)
-  --   expect(scsLib._commentNeedsSpaceInside(';; foo')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceInside('; foo')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceInside(';      foo')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceInside(';')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceInside(';;')).toBe(false)
-  --   expect(scsLib._commentNeedsSpaceInside(';;;;;;')).toBe(false)
-  -- })
+  lu.assertEquals(scsLib._removeLeadingWhitespace("\n ,,"), ",,")
+  lu.assertEquals(scsLib._removeLeadingWhitespace(" \n "), "")
+  lu.assertEquals(scsLib._removeLeadingWhitespace("  \n\n  "), "")
+  lu.assertEquals(scsLib._removeLeadingWhitespace(",, \n "), "")
+  lu.assertEquals(scsLib._removeLeadingWhitespace(",, \n\n "), "")
+  lu.assertEquals(scsLib._removeLeadingWhitespace(",, \n\n"), "")
 
-  -- test('removeLeadingWhitespace', () => {
-  --   expect(scsLib._removeLeadingWhitespace('\n ,,')).toBe(',,')
-  --   expect(scsLib._removeLeadingWhitespace(' \n ')).toBe('')
-  --   expect(scsLib._removeLeadingWhitespace('  \n\n  ')).toBe('')
-  --   expect(scsLib._removeLeadingWhitespace(',, \n ')).toBe('')
-  --   expect(scsLib._removeLeadingWhitespace(',, \n\n ')).toBe('')
-  --   expect(scsLib._removeLeadingWhitespace(',, \n\n')).toBe('')
-  -- })
-
-  -- test('txtHasCommasAfterNewline', () => {
-  --   expect(scsLib._txtHasCommasAfterNewline('\n ,,')).toBe(true)
-  --   expect(scsLib._txtHasCommasAfterNewline('\n\n  ,')).toBe(true)
-  --   expect(scsLib._txtHasCommasAfterNewline(' \n ')).toBe(false)
-  --   expect(scsLib._txtHasCommasAfterNewline('  \n\n  ')).toBe(false)
-  --   expect(scsLib._txtHasCommasAfterNewline(',, \n ')).toBe(false)
-  --   expect(scsLib._txtHasCommasAfterNewline(',, \n\n ')).toBe(false)
-  -- })
+  lu.assertTrue(scsLib._txtHasCommasAfterNewline("\n ,,"))
+  lu.assertTrue(scsLib._txtHasCommasAfterNewline("\n\n  ,"))
+  lu.assertFalse(scsLib._txtHasCommasAfterNewline(" \n "))
+  lu.assertFalse(scsLib._txtHasCommasAfterNewline("  \n\n  "))
+  lu.assertFalse(scsLib._txtHasCommasAfterNewline(",, \n "))
+  lu.assertFalse(scsLib._txtHasCommasAfterNewline(",, \n\n "))
 end
 
 TestParsers = {}
@@ -653,54 +643,51 @@ function TestParsers:testString()
   lu.assertEquals(result3.endIdx, 4)
 end
 
-function TestParsers:testRegex()
-  local regexParser1 = scsLib._Regex({
+function TestParsers:testPattern()
+  local patternParser1 = scsLib._Pattern({
     pattern = "[cd]+",
-    name = "regex_parser1",
+    name = "pattern_parser1",
   })
 
-  lu.assertIsFunction(regexParser1.parse)
+  lu.assertIsFunction(patternParser1.parse)
 
   -- Test 1: No match at beginning of string
-  local regexResult1 = regexParser1.parse("aaacb", 1)
-  lu.assertNil(regexResult1)
+  local patternResult1 = patternParser1.parse("aaacb", 1)
+  lu.assertNil(patternResult1)
 
   -- -- Test 2: Single character match
-  local regexResult2 = regexParser1.parse("aaacb", 4)
-  lu.assertEquals(regexResult2.name, "regex_parser1")
-  lu.assertEquals(regexResult2.startIdx, 4)
-  lu.assertEquals(regexResult2.endIdx, 5)
-  lu.assertEquals(regexResult2.text, "c")
+  local patternResult2 = patternParser1.parse("aaacb", 4)
+  lu.assertEquals(patternResult2.name, "pattern_parser1")
+  lu.assertEquals(patternResult2.startIdx, 4)
+  lu.assertEquals(patternResult2.endIdx, 5)
+  lu.assertEquals(patternResult2.text, "c")
 
   -- -- Test 3: Multiple character match
-  local regexResult3 = regexParser1.parse("aaacddb", 4)
-  lu.assertEquals(regexResult3.name, "regex_parser1")
-  lu.assertEquals(regexResult3.startIdx, 4)
-  lu.assertEquals(regexResult3.endIdx, 7)
-  lu.assertEquals(regexResult3.text, "cdd")
+  local patternResult3 = patternParser1.parse("aaacddb", 4)
+  lu.assertEquals(patternResult3.name, "pattern_parser1")
+  lu.assertEquals(patternResult3.startIdx, 4)
+  lu.assertEquals(patternResult3.endIdx, 7)
+  lu.assertEquals(patternResult3.text, "cdd")
 
   -- -- Test 4: Match starting at different position
-  local regexResult4 = regexParser1.parse("aaacddb", 5)
-  lu.assertEquals(regexResult4.name, "regex_parser1")
-  lu.assertEquals(regexResult4.startIdx, 5)
-  lu.assertEquals(regexResult4.endIdx, 7)
-  lu.assertEquals(regexResult4.text, "dd")
+  local patternResult4 = patternParser1.parse("aaacddb", 5)
+  lu.assertEquals(patternResult4.name, "pattern_parser1")
+  lu.assertEquals(patternResult4.startIdx, 5)
+  lu.assertEquals(patternResult4.endIdx, 7)
+  lu.assertEquals(patternResult4.text, "dd")
 
-  local regexParser2 = scsLib._Regex({
+  local patternParser2 = scsLib._Pattern({
     pattern = "[^xyz][^xyz]*",
-    name = "regex_parser2",
+    name = "pattern_parser2",
   })
-  local regexResult5 = regexParser2.parse("aaa", 1)
-  lu.assertTable(regexResult5)
-  lu.assertEquals(regexResult5.startIdx, 1)
-  lu.assertEquals(regexResult5.endIdx, 4)
-  lu.assertEquals(regexResult5.text, "aaa")
+  local patternResult5 = patternParser2.parse("aaa", 1)
+  lu.assertTable(patternResult5)
+  lu.assertEquals(patternResult5.startIdx, 1)
+  lu.assertEquals(patternResult5.endIdx, 4)
+  lu.assertEquals(patternResult5.text, "aaa")
 
-  local regexResult6 = regexParser2.parse("xaa", 1)
-  lu.assertNil(regexResult6)
-  -- lu.assertEquals(regexResult5.startIdx, 1)
-  -- lu.assertEquals(regexResult5.endIdx, 4)
-  -- lu.assertEquals(regexResult5.text, 'aaa')
+  local patternResult6 = patternParser2.parse("xaa", 1)
+  lu.assertNil(patternResult6)
 end
 
 function TestParsers:testChoice()
