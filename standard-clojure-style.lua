@@ -159,6 +159,11 @@ local function alwaysTrue()
   return true
 end
 
+-- Convert character sets to Lua pattern-safe strings
+local function escapePattern(str)
+  return str:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+end
+
 -- -----------------------------------------------------------------------------
 -- Stack Operations
 
@@ -688,6 +693,47 @@ local function specialCharParser(txt, pos)
   return nil
 end
 
+-- parses whitespace character-by-character
+local function whitespaceParser(txt, pos)
+  local maxLength = strLen(txt)
+  if maxLength == 0 then
+    return nil
+  end
+
+  local charIdx = pos
+  local endIdx = -1
+  local keepSearching = true
+  local parsedTxt = ""
+
+  while keepSearching do
+    local ch = charAt(txt, charIdx)
+    if ch == nil or ch == "" then
+      keepSearching = false
+    elseif whitespaceCharsTbl[ch] then
+      parsedTxt = strConcat(parsedTxt, ch)
+      endIdx = charIdx
+    else
+      keepSearching = false
+    end
+
+    charIdx = inc(charIdx)
+    if charIdx > maxLength then
+      keepSearching = false
+    end
+  end
+
+  if endIdx > 0 then
+    return Node({
+      endIdx = inc(endIdx),
+      name = "whitespace",
+      startIdx = pos,
+      text = parsedTxt,
+    })
+  end
+
+  return nil
+end
+
 -- -----------------------------------------------------------------------------
 -- Sequence Parsers
 
@@ -839,52 +885,26 @@ parsers.string = Seq({
   },
 })
 
--- -- Define character sets
-local whitespaceCommons = " ,\n\r\t\f"
-local whitespaceUnicodes =
-  "\u{000B}\u{001C}\u{001D}\u{001E}\u{001F}\u{2028}\u{2029}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2008}\u{2009}\u{200a}\u{205f}\u{3000}"
-local whitespaceChars = whitespaceCommons .. whitespaceUnicodes
+parsers.token = Choice({
+  parsers = {
+    { parse = specialCharParser },
+    { parse = tokenParser },
+  },
+})
 
-local tokenHeadChars = "()[]{}\"@~^;`#'"
-local tokenTailChars = '()[]{}"@^;`'
+-- dev toggle
+local usePatternWhitespaceParser = false
 
--- Convert character sets to Lua pattern-safe strings
-local function escapePattern(str)
-  return str:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
-end
-
--- -- Build the token pattern
-local tokenHeadPattern = escapePattern(tokenHeadChars)
-local tokenTailPattern = escapePattern(tokenTailChars)
-local whitespacePattern = escapePattern(whitespaceChars)
-
-local useRegexTokenParser = false
-
-if useRegexTokenParser then
-  parsers.token = Choice({
-    parsers = {
-      Pattern({
-        name = "token",
-        pattern = "(%#%#)?[^"
-          .. tokenHeadPattern
-          .. whitespacePattern
-          .. "][^"
-          .. tokenTailPattern
-          .. whitespacePattern
-          .. "]*",
-      }),
-    },
-  })
+if usePatternWhitespaceParser then
+  local whitespaceChars = ""
+  for key, value in pairs(whitespaceCharsTbl) do
+    whitespaceChars = whitespaceChars .. key
+  end
+  local whitespacePattern = escapePattern(whitespaceChars)
+  parsers._ws = Pattern({ name = "whitespace", pattern = "[" .. whitespacePattern .. "]+" })
 else
-  parsers.token = Choice({
-    parsers = {
-      { parse = specialCharParser },
-      { parse = tokenParser },
-    },
-  })
+  parsers._ws = { name = "whitespace", parse = whitespaceParser }
 end
-
-parsers._ws = Pattern({ name = "whitespace", pattern = "[" .. whitespacePattern .. "]+" })
 
 parsers.comment = Pattern({ name = "comment", pattern = ";[^\n]*" })
 
