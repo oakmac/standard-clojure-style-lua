@@ -6,9 +6,18 @@ This is a port of [Standard Clojure Style] in Lua 🌙
 
 ## Development
 
+Make sure [lua] and [Stylua] are installed.
+
 ```sh
+# run the unit tests
 lua tests.lua
+
+# format files with Stylua
+./scripts/format.sh
 ```
+
+[lua]:https://lua.org/
+[StyLua]:https://github.com/JohnnyMorganz/StyLua
 
 ## TODO
 
@@ -18,14 +27,12 @@ lua tests.lua
 - [x] get the parser test cases passing
 - [x] parse_ns test cases
 - [x] format test cases
+- [x] set up continuous integration
 - [ ] format edge case tests like CRLF and line endings
-- [ ] set up continuous integration
 - [ ] use a Set / Table indices for the special chars lookups
   - https://www.lua.org/pil/11.5.html
-- [ ] set up CI
 - [ ] create a changelog file
-
-[StyLua]:https://github.com/JohnnyMorganz/StyLua
+- [ ] figure out a release process / approach
 
 ## License
 
