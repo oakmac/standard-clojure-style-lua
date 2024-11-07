@@ -1,0 +1,30 @@
+---
+
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua/LuaJIT
+        uses: leafo/gh-actions-lua@v10.0.0
+
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check ./standard-clojure-style.lua ./tests.lua
+
+      - name: Unit tests
+        run: lua tests.lua
