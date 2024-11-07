@@ -42,27 +42,35 @@ local function isTable(t)
   return type(t) == "table"
 end
 
--- NOTE: this might have performance implications
--- Should investigate after getting everything working.
--- C. Oakman, 30 Oct 2024
-local function isArray(x)
-  -- In Lua, arrays are tables with consecutive integer keys starting at 1
-  -- This is a basic implementation that checks if a table appears to be array-like
-  if type(x) ~= "table" then
-    return false
-  end
-  local count = 0
-  for _ in pairs(x) do
-    count = count + 1
-  end
-  -- Check if all indices from 1 to count exist
-  for i = 1, count do
-    if x[i] == nil then
-      return false
-    end
-  end
-  return true
+-- quickly check that something is Array-like
+-- NOTE: see a more thorough version of this below which also passes the test suite
+local function isArray(arr)
+  return type(arr) == "table"
 end
+
+-- NOTE: this is a more thorough version of isArray than the function above
+-- commented out here because we do not really need this level of thoroughness
+-- for this library
+-- local function isArray(arr)
+--   -- In Lua, arrays are tables with consecutive integer keys starting at 1
+--   -- This is a basic implementation that checks if a table appears to be array-like
+--   if type(arr) ~= "table" then
+--     return false
+--   end
+
+--   local count = 0
+--   for _ in pairs(arr) do
+--     count = count + 1
+--   end
+
+--   -- Check if all indices from 1 to count exist
+--   for i = 1, count do
+--     if arr[i] == nil then
+--       return false
+--     end
+--   end
+--   return true
+-- end
 
 -- -----------------------------------------------------------------------------
 -- Language Helpers
@@ -150,18 +158,6 @@ end
 local function alwaysTrue()
   return true
 end
-
--- local function arrayContainsItm(arr, itm)
---   local arrLength = arraySize(arr)
---   local idx = 1
---   while idx <= arrLength do
---     if arr[idx] == itm then
---       return true
---     end
---     idx = inc(idx)
---   end
---   return false
--- end
 
 -- -----------------------------------------------------------------------------
 -- Stack Operations
@@ -654,7 +650,7 @@ local function tokenParser(txt, pos)
   return nil
 end
 
-local specialChars = {
+local specialCharsTbl = {
   ["("] = true,
   [")"] = true,
   ["["] = true,
@@ -679,7 +675,7 @@ local function specialCharParser(txt, pos)
   local firstChar = charAt(txt, pos)
   if firstChar == "\\" then
     local secondChar = charAt(txt, inc(pos))
-    if specialChars[secondChar] then
+    if specialCharsTbl[secondChar] then
       return Node({
         endIdx = inc(inc(pos)),
         name = "token",
@@ -1097,18 +1093,18 @@ local function isCommaNode(n)
   return n.name == "whitespace" and strIncludes(n.text, ",")
 end
 
+local parenOpenersTbl = {
+  ["("] = true,
+  ["["] = true,
+  ["{"] = true,
+  ["#{"] = true,
+  ["#("] = true,
+  ["#?("] = true,
+  ["#?@("] = true,
+}
+
 local function isParenOpener(n)
-  return n
-    and n.name == ".open"
-    and (
-      n.text == "("
-      or n.text == "["
-      or n.text == "{"
-      or n.text == "#{"
-      or n.text == "#("
-      or n.text == "#?("
-      or n.text == "#?@("
-    )
+  return n and n.name == ".open" and parenOpenersTbl[n.text]
 end
 
 local function isParenCloser(n)
@@ -1192,26 +1188,26 @@ local function isGenClassNode(node)
   return node and isString(node.text) and node.text == ":gen-class"
 end
 
+local genClassKeywordsTbl = {
+  [":name"] = true,
+  [":extends"] = true,
+  [":implements"] = true,
+  [":init"] = true,
+  [":constructors"] = true,
+  [":post-init"] = true,
+  [":methods"] = true,
+  [":main"] = true,
+  [":factory"] = true,
+  [":state"] = true,
+  [":exposes"] = true,
+  [":exposes-methods"] = true,
+  [":prefix"] = true,
+  [":impl-ns"] = true,
+  [":load-impl-ns"] = true,
+}
+
 local function isGenClassKeyword(node)
-  return node
-    and isString(node.text)
-    and (
-      node.text == ":name"
-      or node.text == ":extends"
-      or node.text == ":implements"
-      or node.text == ":init"
-      or node.text == ":constructors"
-      or node.text == ":post-init"
-      or node.text == ":methods"
-      or node.text == ":main"
-      or node.text == ":factory"
-      or node.text == ":state"
-      or node.text == ":exposes"
-      or node.text == ":exposes-methods"
-      or node.text == ":prefix"
-      or node.text == ":impl-ns"
-      or node.text == ":load-impl-ns"
-    )
+  return node and isString(node.text) and genClassKeywordsTbl[node.text]
 end
 
 local genClassKeys = {
@@ -2856,6 +2852,7 @@ local function parseNs(nodesArr)
     -- exit if we are at the end of the nodes
     if idx > numNodes then
       continueParsingNsForm = false
+
     -- exit if we have finished parsing the ns form
     elseif nsNodeIdx > 0 and not insideNsForm and lineNo >= inc(inc(nsFormEndsLineIdx)) then
       continueParsingNsForm = false
@@ -3684,12 +3681,13 @@ local function formatNs(ns)
       end
       local genClassValueIndentationLevel = inc(genClassIndentationLevel)
       local indentationStr2 = repeatString(" ", genClassValueIndentationLevel)
+
       -- print the :gen-class keys in the order in which they appear in the clojure.core.genclass documentation
       -- https://github.com/clojure/clojure/blob/clojure-1.11.1/src/clj/clojure/genclass.clj#L507
-      local idx3 = 0
+      local idx3 = 1
       local numGenClassKeys = arraySize(genClassKeys)
-      while idx3 < numGenClassKeys do
-        local genClassKey = genClassKeys[idx3 + 1]
+      while idx3 <= numGenClassKeys do
+        local genClassKey = genClassKeys[idx3]
         local genClassValue = ns.genClass[genClassKey]
         if genClassValue then
           -- print the comment from the previous line if necessary
