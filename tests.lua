@@ -934,6 +934,7 @@ local formatTestsToSkip = {
 }
 
 local formatTestCases = json.decode(readFile("./test_cases/format_tests.json"))
+local whitespaceTestsExist = false
 
 function testParser()
   lu.assertTrue(isArray(formatTestCases), "format_tests.json is not an Array")
@@ -967,8 +968,34 @@ function testParser()
       end
 
       lu.assertTrue(resultIsTheSame, "format test case " .. testCase.name .. " - format output does not match")
+
+      if testCase.name == "Trim trailing whitespace 1" then
+        whitespaceTestsExist = true
+        lu.assertTrue(
+          scsLib._strEndsWith(testCase.input, ")   "),
+          "Trim trailing whitespace test case should not be trimmed"
+        )
+      end
+
+      if testCase.name == "Trim trailing whitespace 2" then
+        whitespaceTestsExist = true
+        lu.assertTrue(
+          scsLib._strIncludes(testCase.input, '"aaa",   \n)(def'),
+          "Trim trailing whitespace test case should not be trimmed"
+        )
+      end
+
+      if testCase.name == "Surrounding newlines removed additional" then
+        whitespaceTestsExist = true
+        lu.assertTrue(
+          scsLib._strIncludes(testCase.input, "aaa  \n)"),
+          "Surrounding newlines removed additional test case should not be trimmed"
+        )
+      end
     end
   end
+
+  lu.assertTrue(whitespaceTestsExist, "format whitespace test cases are missing")
 end
 
 -- -----------------------------------------------------------------------------
