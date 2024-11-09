@@ -21,15 +21,7 @@ lua tests.lua
 
 ## TODO
 
-- [x] set up test harness
-- [x] set up a formatter script with [StyLua]
-- [x] get the internal test cases passing
-- [x] get the parser test cases passing
-- [x] parse_ns test cases
-- [x] format test cases
-- [x] set up continuous integration
-- [x] use a Set / Table indices for the special chars lookups
-- [ ] format edge case tests like CRLF and line endings
+- [ ] add format edge case tests like CRLF and line endings
 - [ ] create a changelog file
 - [ ] figure out a release process / approach
 
