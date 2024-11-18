@@ -1077,6 +1077,10 @@ local function isReferKeyword(node)
   return node and isString(node.text) and node.text == ":refer"
 end
 
+local function isDefaultKeyword(node)
+  return node and isString(node.text) and node.text == ":default"
+end
+
 local function isReferMacrosKeyword(node)
   return node and isString(node.text) and node.text == ":refer-macros"
 end
@@ -1916,6 +1920,7 @@ local function parseNs(nodesArr)
   local requireRenameIdx = -1
   local skipNodesUntilWeReachThisId = -1
   local sectionToAttachEolCommentsTo = nil
+  local nextTokenIsRequireDefaultSymbol = false
 
   while continueParsingNsForm do
     local node = nodesArr[idx]
@@ -2006,6 +2011,7 @@ local function parseNs(nodesArr)
       if referIdx > 0 and parenNestingDepth < referParenNestingDepth then
         referIdx = -1
         referParenNestingDepth = -1
+        nextTokenIsRequireDefaultSymbol = false
       end
       if insideRequireForm and requireSymbolIdx > 0 then
         requireSymbolIdx = -1
@@ -2482,6 +2488,10 @@ local function parseNs(nodesArr)
       referIdx = idx
       referParenNestingDepth = parenNestingDepth
 
+    -- is this :require :default ?
+    elseif idx > requireNodeIdx and insideRequireForm and isTokenNode2 and isDefaultKeyword(node) then
+      nextTokenIsRequireDefaultSymbol = true
+
     -- collect :require :exclude symbols
     elseif
       idx > requireNodeIdx
@@ -2509,6 +2519,11 @@ local function parseNs(nodesArr)
     -- collect :refer :all
     elseif idx > referIdx and insideRequireForm and isTokenNode2 and isAllNode(node) then
       result.requires[activeRequireIdx].refer = "all"
+
+    -- collect :refer :default symbol
+    elseif idx > referIdx and insideRequireForm and isTokenNode2 and nextTokenIsRequireDefaultSymbol then
+      result.requires[activeRequireIdx].default = node.text
+      nextTokenIsRequireDefaultSymbol = false
 
     -- collect :require :refer symbols
     elseif
@@ -2979,10 +2994,12 @@ function formatRequireLine(req, initialIndentation)
   outTxt = strConcat3(outTxt, "[", req.symbol)
   if isString(req.as) and req.as ~= "" then
     outTxt = strConcat3(outTxt, " :as ", req.as)
-  end
-  if isString(req.asAlias) and req.asAlias ~= "" then
+  elseif isString(req.asAlias) and req.asAlias ~= "" then
     outTxt = strConcat3(outTxt, " :as-alias ", req.asAlias)
+  elseif isString(req.default) and req.default ~= "" then
+    outTxt = strConcat3(outTxt, " :default ", req.default)
   end
+
   -- NOTE: this will not work if the individual :refer symbols are wrapped in a reader conditional
   if isArray(req.refer) and arraySize(req.refer) > 0 then
     outTxt = strConcat(outTxt, " :refer [")

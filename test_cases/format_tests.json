@@ -765,6 +765,11 @@
     "expected": "(ns cljs.math\n  {:doc \"ClojureScript wrapper functions for math operations\"\n   :author \"Paula Gearon\"}\n  #?(:clj\n     ;; create space to load this in Clojure for testing\n     (:refer-clojure :exclude [+ aget aset bit-shift-left bit-shift-right unsigned-bit-shift-right]))\n  #?(:clj\n     (:require\n      [js :refer [+ aget aset]]))\n  #?(:clj\n     (:import\n      (js ArrayBuffer Float64Array Uint32Array Uint8Array))))"
   },
   {
+    "name": "GitHub Issue #158 - ClojureScript require default",
+    "input": "(ns com.example.my-app\n  (:require\n       [\"react-select\" :default Select]\n       [\"react-dropzone\" :default Dropzone]\n       [\"react-select/creatable\" :default CreatableSelect]))",
+    "expected": "(ns com.example.my-app\n  (:require\n   [\"react-dropzone\" :default Dropzone]\n   [\"react-select\" :default Select]\n   [\"react-select/creatable\" :default CreatableSelect]))"
+  },
+  {
     "name": "Trim trailing whitespace 1",
     "input": "(def aaa \"aaa\")   ",
     "expected": "(def aaa \"aaa\")"
