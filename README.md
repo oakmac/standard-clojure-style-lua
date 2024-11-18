@@ -22,7 +22,6 @@ lua tests.lua
 ## TODO
 
 - [ ] add format edge case tests like CRLF and line endings
-- [ ] figure out a release process / approach
 
 ## License
 
