@@ -1,5 +1,5 @@
 -- standard-clojure-style.lua - an implementation of Standard Clojure Style in Lua
--- v[development]
+-- v0.15.0
 -- https://github.com/oakmac/standard-clojure-style-lua
 --
 -- Copyright (c) 2024, Chris Oakman
@@ -11,6 +11,7 @@ local appendChildren, formatRenamesList, getParser, inc, parse
 
 -- exported module table
 local M = {}
+M.version = "0.15.0"
 
 -- -----------------------------------------------------------------------------
 -- Development Helpers
@@ -4320,7 +4321,6 @@ end
 M.format = format
 M.parse = parse
 M.parseNs = parseNs
-M.version = "0.1.0"
 
 -- Export internal functions for testing purposes
 
