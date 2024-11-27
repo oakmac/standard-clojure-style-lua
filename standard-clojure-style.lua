@@ -1,5 +1,5 @@
 -- standard-clojure-style.lua - an implementation of Standard Clojure Style in Lua
--- v0.15.0
+-- v0.16.0
 -- https://github.com/oakmac/standard-clojure-style-lua
 --
 -- Copyright (c) 2024, Chris Oakman
