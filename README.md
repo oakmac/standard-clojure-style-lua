@@ -19,10 +19,6 @@ lua tests.lua
 [lua]:https://lua.org/
 [StyLua]:https://github.com/JohnnyMorganz/StyLua
 
-## TODO
-
-- [ ] add format edge case tests like CRLF and line endings
-
 ## License
 
 [ISC License](LICENSE.md)
