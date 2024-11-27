@@ -7,7 +7,7 @@
 -- https://github.com/oakmac/standard-clojure-style-lua/blob/master/LICENSE.md
 
 -- forward declarations
-local appendChildren, formatRenamesList, getParser, inc, parse
+local appendChildren, formatRenamesList, getParser, inc, isNamespacedMapOpener, parse
 
 -- exported module table
 local M = {}
@@ -1129,7 +1129,7 @@ local parenOpenersTbl = {
 }
 
 local function isParenOpener(n)
-  return n and n.name == ".open" and parenOpenersTbl[n.text]
+  return n and n.name == ".open" and (parenOpenersTbl[n.text] or isNamespacedMapOpener(n))
 end
 
 local function isParenCloser(n)
@@ -1187,6 +1187,10 @@ end
 
 local function isAnonFnOpener(opener)
   return opener.text == "#("
+end
+
+function isNamespacedMapOpener(opener)
+  return opener.name == ".open" and strStartsWith(opener.text, "#:") and strEndsWith(opener.text, "{")
 end
 
 local function isReaderConditionalOpener(opener)
@@ -1556,6 +1560,8 @@ local function numSpacesForIndentation(wrappingOpener)
       return inc(openerColIdx)
     elseif isAnonFnOpener(wrappingOpener) then
       return openerColIdx + 3
+    elseif isNamespacedMapOpener(wrappingOpener) then
+      return openerColIdx + strLen(wrappingOpener.text)
     else
       -- else indent two spaces from the wrapping opener
       return inc(inc(openerColIdx))
