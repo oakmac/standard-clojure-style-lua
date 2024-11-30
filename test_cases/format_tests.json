@@ -420,6 +420,31 @@
     "expected": "(def my-vec\n  [#:xyz{:aaa \"aaa\"\n         :bbb \"bbb\"\n         :ccc \"ccc\"}\n\n   #:xyz{:ddd \"ddd\"\n         :eee \"eee\"\n         :fff \"fff\"}])"
   },
   {
+    "name": "GitHub Issue #162 - bug with commas 1",
+    "input": "aaa, ;; foo\nbbb,;;bar",
+    "expected": "aaa ;; foo\nbbb ;; bar"
+  },
+  {
+    "name": "GitHub Issue #162 - bug with commas 2",
+    "input": "(def my-map\n  {:aaa \"aaa\",\n   :bbb \"bbb\", ;; foo\n   :ccc \"ccc\",,,,,,,,,,,,})",
+    "expected": "(def my-map\n  {:aaa \"aaa\"\n   :bbb \"bbb\" ;; foo\n   :ccc \"ccc\"})"
+  },
+  {
+    "name": "GitHub Issue #162 - bug with commas 3",
+    "input": "(def my-vec\n  [a \"a\"\n   b \"b\"\n   ;; foo\n   ,])",
+    "expected": "(def my-vec\n  [a \"a\"\n   b \"b\"\n   ;; foo\n   ,])"
+  },
+  {
+    "name": "GitHub Issue #162 - bug with commas 4",
+    "input": "(def my-vec\n  [a \"a\"\n   b \"b\",\n   ;; foo\n   ;; bar\n   ,])",
+    "expected": "(def my-vec\n  [a \"a\"\n   b \"b\"\n   ;; foo\n   ;; bar\n   ,])"
+  },
+  {
+    "name": "GitHub Issue #162 - bug with commas 5",
+    "input": "(def my-vec\n  [a \"a\"\n   b \"b\",\n   ;; foo\n   ;; bar\n   , ])",
+    "expected": "(def my-vec\n  [a \"a\"\n   b \"b\"\n   ;; foo\n   ;; bar\n   ,])"
+  },
+  {
     "name": "Simple namespace",
     "input": "(ns aaa)",
     "expected": "(ns aaa)"
