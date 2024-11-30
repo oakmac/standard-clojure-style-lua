@@ -268,11 +268,6 @@ local function strReplaceAll(s, find, replace)
   return string.gsub(s, find, replace)
 end
 
--- replaces all instances of findStr with replaceStr inside of String s
--- local function strReplaceAll(s, findStr, replaceStr)
---   return string.gsub(s, findStr:gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1"), replaceStr)
--- end
-
 local function crlfToLf(txt)
   return txt:gsub("\r\n", "\n")
 end
