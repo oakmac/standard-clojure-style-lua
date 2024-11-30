@@ -278,6 +278,8 @@ local function crlfToLf(txt)
 end
 
 -- http://lua-users.org/wiki/SplitJoin
+-- https://github.com/telemachus/split/blob/main/src/split.lua
+-- https://learnxbyexample.com/lua/string-functions/
 local function strSplit(str, delimiter)
   -- Handle empty string input
   if str == "" then
