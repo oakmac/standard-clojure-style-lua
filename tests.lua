@@ -374,21 +374,6 @@ function TestStringUtil:testCrlfToLf()
   lu.assertEquals(scsLib._crlfToLf("\r\n"), "\n")
 end
 
-function TestStringUtil:testStrSplit()
-  lu.assertTrue(deepCompare(scsLib._strSplit("a-b-c", "-"), { "a", "b", "c" }))
-  lu.assertTrue(deepCompare(scsLib._strSplit("hello world", " "), { "hello", "world" }))
-  lu.assertTrue(deepCompare(scsLib._strSplit("a,b,c", ","), { "a", "b", "c" }))
-  lu.assertTrue(deepCompare(scsLib._strSplit("", "-"), { "" }))
-  lu.assertTrue(deepCompare(scsLib._strSplit("hello", ""), { "h", "e", "l", "l", "o" }))
-  lu.assertTrue(deepCompare(scsLib._strSplit("a", "x"), { "a" }))
-  lu.assertTrue(deepCompare(scsLib._strSplit("a-b-", "-"), { "a", "b", "" }))
-
-  -- FIXME these tests do not pass
-  -- lu.assertTrue(deepCompare(scsLib._strSplit("a  ", "a"), { "", "  " }))
-  -- lu.assertTrue(deepCompare(scsLib._strSplit("\n  ,", "\n"), { "", "   b" }))
-  -- lu.assertEquals(arraySize(scsLib._strSplit("\n  ,", "\n")), 2)
-end
-
 -- Test class
 TestStackOperations = {}
 
@@ -564,6 +549,11 @@ function testInternals()
   -- NOTE: this function does not remove newline characters
   -- it only needs to operate against a single line
   lu.assertEquals(scsLib._removeTrailingWhitespace("aaa \n "), "aaa \n")
+
+  lu.assertIsFunction(scsLib._removeCharsUpToNewline)
+  lu.assertEquals(scsLib._removeCharsUpToNewline("abc\nxyz"), "xyz")
+  lu.assertEquals(scsLib._removeCharsUpToNewline("abc"), "abc")
+  lu.assertEquals(scsLib._removeCharsUpToNewline("abc\ndef\n\nxyz"), "xyz")
 
   lu.assertTrue(scsLib._txtHasCommasAfterNewline("\n ,,"))
   lu.assertTrue(scsLib._txtHasCommasAfterNewline("\n\n  ,"))

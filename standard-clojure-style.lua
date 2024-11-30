@@ -7,7 +7,7 @@
 -- https://github.com/oakmac/standard-clojure-style-lua/blob/master/LICENSE.md
 
 -- forward declarations
-local appendChildren, formatRenamesList, getParser, inc, isNamespacedMapOpener, parse
+local appendChildren, formatRenamesList, getParser, inc, isNamespacedMapOpener, parse, removeCharsUpToNewline
 
 -- exported module table
 local M = {}
@@ -275,54 +275,6 @@ end
 
 local function crlfToLf(txt)
   return txt:gsub("\r\n", "\n")
-end
-
--- http://lua-users.org/wiki/SplitJoin
--- https://github.com/telemachus/split/blob/main/src/split.lua
--- https://learnxbyexample.com/lua/string-functions/
-local function strSplit(str, delimiter)
-  -- Handle empty string input
-  if str == "" then
-    return { "" }
-  end
-
-  -- If delimiter is empty, split string into individual characters
-  if delimiter == "" then
-    local result = {}
-    for i = 1, #str do
-      result[i] = str:sub(i, i)
-    end
-    return result
-  end
-
-  local result = {}
-  local pattern = "(.-)" .. delimiter
-  local lastEnd = 1
-  local s, e, cap = str:find(pattern, 1)
-
-  while s do
-    if s ~= 1 or cap ~= "" then
-      table.insert(result, cap)
-    end
-    lastEnd = e + 1
-    s, e, cap = str:find(pattern, lastEnd)
-  end
-
-  -- Handle the last part of the string after final delimiter
-  if lastEnd <= #str then
-    cap = str:sub(lastEnd)
-    table.insert(result, cap)
-  elseif lastEnd == #str + 1 then
-    -- Handle case where string ends with delimiter
-    table.insert(result, "")
-  end
-
-  -- Handle case where no delimiter was found
-  if #result == 0 then
-    return { str }
-  end
-
-  return result
 end
 
 -- ---------------------------------------------------------------------------
@@ -1466,15 +1418,8 @@ end
 
 local function isNewlineNodeWithCommaOnNextLine(n)
   if n and isNewlineNode(n) then
-    local txtSlices = strSplit(n.text, "\n")
-    -- print(inspect(txtSlices))
-    -- print("++++++++++++++++++++")
-    -- print(arraySize(txtSlices))
-
-    local lastSlice = arrayLast(txtSlices)
-    -- print(lastSlice)
-    -- print("=========================")
-    if strIncludes(lastSlice, ",") then
+    local tailStr = removeCharsUpToNewline(n.text)
+    if strIncludes(tailStr, ",") then
       return true
     end
   end
@@ -1515,9 +1460,7 @@ function findForwardClosingParens(nodes, idx)
 end
 
 function numSpacesAfterNewline(newlineNode)
-  local x = strSplit(newlineNode.text, "\n")
-  local lastX = arrayLast(x)
-  return strLen(lastX)
+  return strLen(removeCharsUpToNewline(newlineNode.text))
 end
 
 -- adds _origColIdx to the nodes on this line, stopping when we reach the next newline node
@@ -1560,6 +1503,16 @@ end
 -- needs to operates on a single line
 local function removeTrailingWhitespace(txt)
   return string.gsub(txt, "[, ]*$", "")
+end
+
+function removeCharsUpToNewline(txt)
+  local lastNewlineIdx = txt:reverse():find("\n")
+  if lastNewlineIdx then
+    lastNewlineIdx = #txt - lastNewlineIdx + 1
+    return txt:sub(lastNewlineIdx + 1)
+  else
+    return txt
+  end
 end
 
 local function txtHasCommasAfterNewline(s)
@@ -4389,7 +4342,6 @@ M._strIncludes = strIncludes
 M._strJoin = strJoin
 M._strReplaceFirst = strReplaceFirst
 M._strReplaceAll = strReplaceAll
-M._strSplit = strSplit
 M._strStartsWith = strStartsWith
 M._strTrim = strTrim
 M._substr = substr
@@ -4399,6 +4351,7 @@ M._commentNeedsSpaceBefore = commentNeedsSpaceBefore
 M._commentNeedsSpaceInside = commentNeedsSpaceInside
 M._removeLeadingWhitespace = removeLeadingWhitespace
 M._removeTrailingWhitespace = removeTrailingWhitespace
+M._removeCharsUpToNewline = removeCharsUpToNewline
 M._txtHasCommasAfterNewline = txtHasCommasAfterNewline
 
 M._AnyChar = AnyChar
