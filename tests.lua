@@ -359,6 +359,13 @@ function TestStringUtil:testStrReplaceFirst()
   lu.assertEquals(scsLib._strReplaceFirst("hello", "x", "y"), "hello")
 end
 
+function TestStringUtil:testStrReplaceAll()
+  lu.assertEquals(scsLib._strReplaceAll("aaa", "a", "b"), "bbb")
+  lu.assertEquals(scsLib._strReplaceAll("a,b,c,", ",", ""), "abc")
+  lu.assertEquals(scsLib._strReplaceAll("a,b,c,", ",", "x"), "axbxcx")
+  lu.assertEquals(scsLib._strReplaceAll("\n\n\n", "\n", "x"), "xxx")
+end
+
 function TestStringUtil:testCrlfToLf()
   lu.assertEquals(scsLib._crlfToLf("hello\r\nworld"), "hello\nworld")
   lu.assertEquals(scsLib._crlfToLf("line1\r\nline2\r\nline3"), "line1\nline2\nline3")
@@ -368,12 +375,18 @@ function TestStringUtil:testCrlfToLf()
 end
 
 function TestStringUtil:testStrSplit()
-  lu.assertEquals(scsLib._strSplit("a-b-c", "-"), { "a", "b", "c" })
-  lu.assertEquals(scsLib._strSplit("hello world", " "), { "hello", "world" })
-  lu.assertEquals(scsLib._strSplit("", "-"), { "" })
-  lu.assertEquals(scsLib._strSplit("hello", ""), { "h", "e", "l", "l", "o" })
-  lu.assertEquals(scsLib._strSplit("a", "x"), { "a" })
-  lu.assertEquals(scsLib._strSplit("a-b-", "-"), { "a", "b", "" })
+  lu.assertTrue(deepCompare(scsLib._strSplit("a-b-c", "-"), { "a", "b", "c" }))
+  lu.assertTrue(deepCompare(scsLib._strSplit("hello world", " "), { "hello", "world" }))
+  lu.assertTrue(deepCompare(scsLib._strSplit("a,b,c", ","), { "a", "b", "c" }))
+  lu.assertTrue(deepCompare(scsLib._strSplit("", "-"), { "" }))
+  lu.assertTrue(deepCompare(scsLib._strSplit("hello", ""), { "h", "e", "l", "l", "o" }))
+  lu.assertTrue(deepCompare(scsLib._strSplit("a", "x"), { "a" }))
+  lu.assertTrue(deepCompare(scsLib._strSplit("a-b-", "-"), { "a", "b", "" }))
+
+  -- FIXME these tests do not pass
+  -- lu.assertTrue(deepCompare(scsLib._strSplit("a  ", "a"), { "", "  " }))
+  -- lu.assertTrue(deepCompare(scsLib._strSplit("\n  ,", "\n"), { "", "   b" }))
+  -- lu.assertEquals(arraySize(scsLib._strSplit("\n  ,", "\n")), 2)
 end
 
 -- Test class
@@ -541,6 +554,16 @@ function testInternals()
   lu.assertEquals(scsLib._removeLeadingWhitespace(",, \n "), "")
   lu.assertEquals(scsLib._removeLeadingWhitespace(",, \n\n "), "")
   lu.assertEquals(scsLib._removeLeadingWhitespace(",, \n\n"), "")
+
+  lu.assertIsFunction(scsLib._removeTrailingWhitespace)
+  lu.assertEquals(scsLib._removeTrailingWhitespace("aaa,"), "aaa")
+  lu.assertEquals(scsLib._removeTrailingWhitespace("aaa , "), "aaa")
+  lu.assertEquals(scsLib._removeTrailingWhitespace("aaa"), "aaa")
+  lu.assertEquals(scsLib._removeTrailingWhitespace(" aaa aaa ,, "), " aaa aaa")
+  lu.assertEquals(scsLib._removeTrailingWhitespace(" , aaa aaa ,, "), " , aaa aaa")
+  -- NOTE: this function does not remove newline characters
+  -- it only needs to operate against a single line
+  lu.assertEquals(scsLib._removeTrailingWhitespace("aaa \n "), "aaa \n")
 
   lu.assertTrue(scsLib._txtHasCommasAfterNewline("\n ,,"))
   lu.assertTrue(scsLib._txtHasCommasAfterNewline("\n\n  ,"))

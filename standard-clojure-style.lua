@@ -264,10 +264,20 @@ local function strReplaceFirst(s, find, replace)
   return (s:gsub(find, replace, 1))
 end
 
+local function strReplaceAll(s, find, replace)
+  return string.gsub(s, find, replace)
+end
+
+-- replaces all instances of findStr with replaceStr inside of String s
+-- local function strReplaceAll(s, findStr, replaceStr)
+--   return string.gsub(s, findStr:gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1"), replaceStr)
+-- end
+
 local function crlfToLf(txt)
   return txt:gsub("\r\n", "\n")
 end
 
+-- http://lua-users.org/wiki/SplitJoin
 local function strSplit(str, delimiter)
   -- Handle empty string input
   if str == "" then
@@ -1452,6 +1462,24 @@ function areForwardNodesAlreadySlurped(nodes, idx)
   return result
 end
 
+local function isNewlineNodeWithCommaOnNextLine(n)
+  if n and isNewlineNode(n) then
+    local txtSlices = strSplit(n.text, "\n")
+    -- print(inspect(txtSlices))
+    -- print("++++++++++++++++++++")
+    -- print(arraySize(txtSlices))
+
+    local lastSlice = arrayLast(txtSlices)
+    -- print(lastSlice)
+    -- print("=========================")
+    if strIncludes(lastSlice, ",") then
+      return true
+    end
+  end
+
+  return false
+end
+
 -- Searches forward in the nodes array for closing paren nodes that could potentially
 -- be slurped up to the current line. Includes whitespace and comment nodes as well.
 -- returns an array of the nodes (possibly empty)
@@ -1461,7 +1489,10 @@ function findForwardClosingParens(nodes, idx)
   local keepSearching = true
   while keepSearching do
     local node = nodes[idx]
+
     if not node then
+      keepSearching = false
+    elseif isNewlineNodeWithCommaOnNextLine(node) then
       keepSearching = false
     elseif isWhitespaceNode(node) or isParenCloser(node) or isCommentNode(node) then
       table.insert(closers, node) -- Lua's equivalent of push
@@ -1471,11 +1502,13 @@ function findForwardClosingParens(nodes, idx)
     end
 
     idx = inc(idx)
+
     -- stop searching if we are at the end of the nodes list
     if idx > nodesSize then
       keepSearching = false
     end
   end
+
   return closers
 end
 
@@ -1519,6 +1552,12 @@ end
 
 local function removeLeadingWhitespace(txt)
   return rtrim(strReplaceFirst(txt, "^[, ]*\n+ *", "")) -- Lua pattern syntax
+end
+
+-- NOTE: this function does not remove newline characters because it only
+-- needs to operates on a single line
+local function removeTrailingWhitespace(txt)
+  return string.gsub(txt, "[, ]*$", "")
 end
 
 local function txtHasCommasAfterNewline(s)
@@ -3959,6 +3998,11 @@ local function formatNodes(nodesArr, parsedNs)
         skipPrintingThisNode = true
       end
 
+      -- do not print a comma at the end of a line
+      if currentNodeIsWhitespace and not currentNodeIsNewline and nextTextNode and isCommentNode(nextTextNode) then
+        node.text = strReplaceAll(node.text, ",", "")
+      end
+
       -- If we are inside of a parenStack and hit a newline,
       -- look forward to see if we can close the current parenTrail.
       -- ie: slurp closing parens onto the current line
@@ -3986,7 +4030,7 @@ local function formatNodes(nodesArr, parsedNs)
           local lastNodeWePrinted = arrayLast(nodesWeHavePrintedOnThisLine)
           local lineTxtHasBeenRightTrimmed = false
           if lastNodeWePrinted and isWhitespaceNode(lastNodeWePrinted) then
-            lineTxt = rtrim(lineTxt)
+            lineTxt = removeTrailingWhitespace(lineTxt)
             lineTxtHasBeenRightTrimmed = true
           end
 
@@ -4342,6 +4386,7 @@ M._strEndsWith = strEndsWith
 M._strIncludes = strIncludes
 M._strJoin = strJoin
 M._strReplaceFirst = strReplaceFirst
+M._strReplaceAll = strReplaceAll
 M._strSplit = strSplit
 M._strStartsWith = strStartsWith
 M._strTrim = strTrim
@@ -4351,6 +4396,7 @@ M._toUpperCase = toUpperCase
 M._commentNeedsSpaceBefore = commentNeedsSpaceBefore
 M._commentNeedsSpaceInside = commentNeedsSpaceInside
 M._removeLeadingWhitespace = removeLeadingWhitespace
+M._removeTrailingWhitespace = removeTrailingWhitespace
 M._txtHasCommasAfterNewline = txtHasCommasAfterNewline
 
 M._AnyChar = AnyChar
