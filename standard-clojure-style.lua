@@ -1918,6 +1918,7 @@ local function parseNs(nodesArr)
   local insideReaderComment = false
   local idOfLastNodeInsideReaderComment = -1
   local requireRenameIdx = -1
+  local requireRenameParenNestingDepth = -1
   local skipNodesUntilWeReachThisId = -1
   local sectionToAttachEolCommentsTo = nil
   local nextTokenIsRequireDefaultSymbol = false
@@ -2043,6 +2044,9 @@ local function parseNs(nodesArr)
       if collectRequireExcludeSymbols and parenNestingDepth < requireExcludeSymbolParenDepth then
         collectRequireExcludeSymbols = false
         requireExcludeSymbolParenDepth = -1
+      end
+      if insideRequireForm and parenNestingDepth < requireRenameParenNestingDepth then
+        requireRenameParenNestingDepth = -1
       end
       requireMacrosReferNodeIdx = -1
       requireMacrosRenameIdx = -1
@@ -2525,11 +2529,42 @@ local function parseNs(nodesArr)
       result.requires[activeRequireIdx].default = node.text
       nextTokenIsRequireDefaultSymbol = false
 
+    -- collect :require renames
+    elseif
+      insideRequireForm
+      and insideRequireList
+      and requireRenameIdx > 0
+      and idx > requireRenameIdx
+      and parenNestingDepth > requireRenameParenNestingDepth
+      and isTokenNode2
+      and isTextNode
+    then
+      stackPush(renamesTmp, node.text)
+
+      if arraySize(renamesTmp) == 2 then
+        local itm = {}
+        itm.fromSymbol = renamesTmp[0]
+        itm.toSymbol = renamesTmp[1]
+
+        if insideReaderConditional and currentReaderConditionalPlatform then
+          itm.platform = currentReaderConditionalPlatform
+        end
+
+        if not isArray(result.requires[activeRequireIdx].rename) then
+          result.requires[activeRequireIdx].rename = {}
+        end
+
+        stackPush(result.requires[activeRequireIdx].rename, itm)
+
+        renamesTmp = {}
+      end
+
     -- collect :require :refer symbols
     elseif
       idx > referIdx
       and insideRequireForm
-      and parenNestingDepth == inc(referParenNestingDepth)
+      and referParenNestingDepth ~= -1
+      and parenNestingDepth > referParenNestingDepth
       and isTokenNode2
       and isTextNode
     then
@@ -2598,35 +2633,6 @@ local function parseNs(nodesArr)
       requireSymbolIdx = idx
       requireFormLineNo = lineNo
       insidePrefixList = true
-
-    -- collect :require renames
-    elseif
-      insideRequireForm
-      and insideRequireList
-      and requireRenameIdx > 0
-      and idx > requireRenameIdx
-      and isTokenNode2
-      and isTextNode
-    then
-      stackPush(renamesTmp, node.text)
-
-      if arraySize(renamesTmp) == 2 then
-        local itm = {}
-        itm.fromSymbol = renamesTmp[1]
-        itm.toSymbol = renamesTmp[2]
-
-        if insideReaderConditional and currentReaderConditionalPlatform then
-          itm.platform = currentReaderConditionalPlatform
-        end
-
-        if not isArray(result.requires[activeRequireIdx].rename) then
-          result.requires[activeRequireIdx].rename = {}
-        end
-
-        stackPush(result.requires[activeRequireIdx].rename, itm)
-
-        renamesTmp = {}
-      end
 
     -- collect :require symbol inside of a list / vector
     elseif
@@ -2698,6 +2704,7 @@ local function parseNs(nodesArr)
     -- :rename inside require
     elseif insideRequireForm and insideRequireList and idx > requireNodeIdx and isRenameKeyword(node) then
       requireRenameIdx = idx
+      requireRenameParenNestingDepth = parenNestingDepth
       renamesTmp = {}
 
     -- collect require Strings in ClojureScript
@@ -3809,11 +3816,10 @@ local function formatNodes(nodesArr, parsedNs)
         insideTheIgnoreZone = false
       end
     else
-
       -- edge case: add '#' text to .tag nodes
       if isTagNode(node) then
-          node.text = '#'
-        end
+        node.text = "#"
+      end
 
       -- record original column indexes for the first line
       if idx == 1 then
