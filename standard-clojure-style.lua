@@ -7,7 +7,7 @@
 -- https://github.com/oakmac/standard-clojure-style-lua/blob/master/LICENSE.md
 
 -- forward declarations
-local appendChildren, formatRenamesList, getParser, inc, isNamespacedMapOpener, parse
+local appendChildren, formatRenamesList, getParser, inc, isNamespacedMapOpener, parse, removeCharsUpToNewline
 
 -- exported module table
 local M = {}
@@ -264,53 +264,12 @@ local function strReplaceFirst(s, find, replace)
   return (s:gsub(find, replace, 1))
 end
 
-local function crlfToLf(txt)
-  return txt:gsub("\r\n", "\n")
+local function strReplaceAll(s, find, replace)
+  return string.gsub(s, find, replace)
 end
 
-local function strSplit(str, delimiter)
-  -- Handle empty string input
-  if str == "" then
-    return { "" }
-  end
-
-  -- If delimiter is empty, split string into individual characters
-  if delimiter == "" then
-    local result = {}
-    for i = 1, #str do
-      result[i] = str:sub(i, i)
-    end
-    return result
-  end
-
-  local result = {}
-  local pattern = "(.-)" .. delimiter
-  local lastEnd = 1
-  local s, e, cap = str:find(pattern, 1)
-
-  while s do
-    if s ~= 1 or cap ~= "" then
-      table.insert(result, cap)
-    end
-    lastEnd = e + 1
-    s, e, cap = str:find(pattern, lastEnd)
-  end
-
-  -- Handle the last part of the string after final delimiter
-  if lastEnd <= #str then
-    cap = str:sub(lastEnd)
-    table.insert(result, cap)
-  elseif lastEnd == #str + 1 then
-    -- Handle case where string ends with delimiter
-    table.insert(result, "")
-  end
-
-  -- Handle case where no delimiter was found
-  if #result == 0 then
-    return { str }
-  end
-
-  return result
+local function crlfToLf(txt)
+  return txt:gsub("\r\n", "\n")
 end
 
 -- ---------------------------------------------------------------------------
@@ -1452,6 +1411,17 @@ function areForwardNodesAlreadySlurped(nodes, idx)
   return result
 end
 
+local function isNewlineNodeWithCommaOnNextLine(n)
+  if n and isNewlineNode(n) then
+    local tailStr = removeCharsUpToNewline(n.text)
+    if strIncludes(tailStr, ",") then
+      return true
+    end
+  end
+
+  return false
+end
+
 -- Searches forward in the nodes array for closing paren nodes that could potentially
 -- be slurped up to the current line. Includes whitespace and comment nodes as well.
 -- returns an array of the nodes (possibly empty)
@@ -1461,7 +1431,10 @@ function findForwardClosingParens(nodes, idx)
   local keepSearching = true
   while keepSearching do
     local node = nodes[idx]
+
     if not node then
+      keepSearching = false
+    elseif isNewlineNodeWithCommaOnNextLine(node) then
       keepSearching = false
     elseif isWhitespaceNode(node) or isParenCloser(node) or isCommentNode(node) then
       table.insert(closers, node) -- Lua's equivalent of push
@@ -1471,18 +1444,18 @@ function findForwardClosingParens(nodes, idx)
     end
 
     idx = inc(idx)
+
     -- stop searching if we are at the end of the nodes list
     if idx > nodesSize then
       keepSearching = false
     end
   end
+
   return closers
 end
 
 function numSpacesAfterNewline(newlineNode)
-  local x = strSplit(newlineNode.text, "\n")
-  local lastX = arrayLast(x)
-  return strLen(lastX)
+  return strLen(removeCharsUpToNewline(newlineNode.text))
 end
 
 -- adds _origColIdx to the nodes on this line, stopping when we reach the next newline node
@@ -1519,6 +1492,22 @@ end
 
 local function removeLeadingWhitespace(txt)
   return rtrim(strReplaceFirst(txt, "^[, ]*\n+ *", "")) -- Lua pattern syntax
+end
+
+-- NOTE: this function does not remove newline characters because it only
+-- needs to operates on a single line
+local function removeTrailingWhitespace(txt)
+  return string.gsub(txt, "[, ]*$", "")
+end
+
+function removeCharsUpToNewline(txt)
+  local lastNewlineIdx = txt:reverse():find("\n")
+  if lastNewlineIdx then
+    lastNewlineIdx = #txt - lastNewlineIdx + 1
+    return txt:sub(lastNewlineIdx + 1)
+  else
+    return txt
+  end
 end
 
 local function txtHasCommasAfterNewline(s)
@@ -3959,6 +3948,11 @@ local function formatNodes(nodesArr, parsedNs)
         skipPrintingThisNode = true
       end
 
+      -- do not print a comma at the end of a line
+      if currentNodeIsWhitespace and not currentNodeIsNewline and nextTextNode and isCommentNode(nextTextNode) then
+        node.text = strReplaceAll(node.text, ",", "")
+      end
+
       -- If we are inside of a parenStack and hit a newline,
       -- look forward to see if we can close the current parenTrail.
       -- ie: slurp closing parens onto the current line
@@ -3986,7 +3980,7 @@ local function formatNodes(nodesArr, parsedNs)
           local lastNodeWePrinted = arrayLast(nodesWeHavePrintedOnThisLine)
           local lineTxtHasBeenRightTrimmed = false
           if lastNodeWePrinted and isWhitespaceNode(lastNodeWePrinted) then
-            lineTxt = rtrim(lineTxt)
+            lineTxt = removeTrailingWhitespace(lineTxt)
             lineTxtHasBeenRightTrimmed = true
           end
 
@@ -4342,7 +4336,7 @@ M._strEndsWith = strEndsWith
 M._strIncludes = strIncludes
 M._strJoin = strJoin
 M._strReplaceFirst = strReplaceFirst
-M._strSplit = strSplit
+M._strReplaceAll = strReplaceAll
 M._strStartsWith = strStartsWith
 M._strTrim = strTrim
 M._substr = substr
@@ -4351,6 +4345,8 @@ M._toUpperCase = toUpperCase
 M._commentNeedsSpaceBefore = commentNeedsSpaceBefore
 M._commentNeedsSpaceInside = commentNeedsSpaceInside
 M._removeLeadingWhitespace = removeLeadingWhitespace
+M._removeTrailingWhitespace = removeTrailingWhitespace
+M._removeCharsUpToNewline = removeCharsUpToNewline
 M._txtHasCommasAfterNewline = txtHasCommasAfterNewline
 
 M._AnyChar = AnyChar
