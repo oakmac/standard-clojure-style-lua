@@ -2543,8 +2543,8 @@ local function parseNs(nodesArr)
 
       if arraySize(renamesTmp) == 2 then
         local itm = {}
-        itm.fromSymbol = renamesTmp[0]
-        itm.toSymbol = renamesTmp[1]
+        itm.fromSymbol = renamesTmp[1]
+        itm.toSymbol = renamesTmp[2]
 
         if insideReaderConditional and currentReaderConditionalPlatform then
           itm.platform = currentReaderConditionalPlatform
@@ -2571,9 +2571,8 @@ local function parseNs(nodesArr)
       if not isArray(result.requires[activeRequireIdx].refer) then
         result.requires[activeRequireIdx].refer = {}
       end
-      local referObj = {
-        symbol = node.text,
-      }
+      local referObj = {}
+      referObj["symbol"] = node.text
       stackPush(result.requires[activeRequireIdx].refer, referObj)
 
     -- collect :require symbol not inside of a list / vector
