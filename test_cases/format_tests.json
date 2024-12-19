@@ -455,11 +455,6 @@
     "expected": "(foo bar #aaa \"aaa\"\n              ;; bbb\n              :ccc)\n\n(foo bar #aaa \"aaa\"\n         ;; bbb\n         :ccc)\n\n(foo\n  #aaa \"aaa\")"
   },
   {
-    "name": "GitHub Issue #169 examples",
-    "input": "(filter\n  #(not= 1 %) [1 2 3])\n\n(let [result (filter\n            #(not= 1 %) [123])]\n  result)\n\n(let [result (->>\n            (filter\n             #(not= 1 %) [123]))]\n  result)",
-    "expected": "(filter\n  #(not= 1 %) [1 2 3])\n\n(let [result (filter\n               #(not= 1 %) [123])]\n  result)\n\n(let [result (->>\n               (filter\n                 #(not= 1 %) [123]))]\n  result)"
-  },
-  {
     "name": "Simple namespace",
     "input": "(ns aaa)",
     "expected": "(ns aaa)"

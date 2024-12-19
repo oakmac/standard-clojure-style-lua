@@ -1465,6 +1465,7 @@ function recordOriginalColIndexes(nodes, idx)
     initialSpaces = numSpacesAfterNewline(nodes[idx])
     idx = inc(idx)
   end
+
   local colIdx = initialSpaces
   local numNodes = arraySize(nodes)
   local keepSearching = true
@@ -1480,6 +1481,9 @@ function recordOriginalColIndexes(nodes, idx)
         local nodeTxtLength = strLen(nodeTxt)
         node._origColIdx = colIdx
         colIdx = colIdx + nodeTxtLength
+      elseif isTagNode(node) then
+        node._origColIdx = colIdx
+        colIdx = inc(colIdx)
       end
     end
     idx = inc(idx)
@@ -3775,7 +3779,6 @@ local function formatNodes(nodesArr, parsedNs)
   local lineIdxOfClosingNsForm = -1
   local nsStartStringIdx = -1
   local nsEndStringIdx = -1
-  local taggedNodeIdx = -1
   local ignoreNodesStartId = -1
   local ignoreNodesEndId = -1
   local insideTheIgnoreZone = false
@@ -3806,6 +3809,12 @@ local function formatNodes(nodesArr, parsedNs)
         insideTheIgnoreZone = false
       end
     else
+
+      -- edge case: add '#' text to .tag nodes
+      if isTagNode(node) then
+          node.text = '#'
+        end
+
       -- record original column indexes for the first line
       if idx == 1 then
         nodesArr = recordOriginalColIndexes(nodesArr, idx)
@@ -3821,7 +3830,7 @@ local function formatNodes(nodesArr, parsedNs)
 
       local currentNodeIsWhitespace = isWhitespaceNode(node)
       local currentNodeIsNewline = isNewlineNode(node)
-      local currentNodeIsTag = isTagNode(node)
+
       local skipPrintingThisNode = false
 
       if isStandardCljIgnoreKeyword(node) and idx > 1 then
@@ -3923,20 +3932,11 @@ local function formatNodes(nodesArr, parsedNs)
         end
       end
 
-      -- flag the index of a tagged literal node so we can mark the next one if necessary
-      if node.name == ".tag" then
-        taggedNodeIdx = idx
-      end
-
       -- add nodes to the top of the parenStack if we are on the opening line
       local topOfTheParenStack = stackPeek(parenStack, 0)
       if topOfTheParenStack and nodeContainsText(node) then
         local onOpeningLineOfParenStack = lineIdx == topOfTheParenStack._parenOpenerLineIdx
         if onOpeningLineOfParenStack then
-          if taggedNodeIdx == dec(idx) then
-            node._nodeIsTagLiteral = true
-          end
-
           node._colIdx = colIdx
           node._lineIdx = lineIdx
           stackPush(topOfTheParenStack._openingLineNodes, node)
@@ -4068,11 +4068,6 @@ local function formatNodes(nodesArr, parsedNs)
                     -- but we use the _printedColIdx of this node to determine the number of leading spaces
                     topOfTheParenStack._rule3NumSpaces = openingLineNode._printedColIdx
 
-                    -- edge case: align tagged literals to the # char
-                    if openingLineNode._nodeIsTagLiteral then
-                      topOfTheParenStack._rule3NumSpaces = dec(openingLineNode._printedColIdx)
-                    end
-
                     -- we are done searching at this point
                     searchForAlignmentNode = false
                   elseif not pastFirstWhitespaceNode and isWhitespaceNode(openingLineNode) then
@@ -4175,7 +4170,7 @@ local function formatNodes(nodesArr, parsedNs)
         skipPrintingThisNode = true
       end -- end currentNodeIsNewline
 
-      if (nodeContainsText(node) or currentNodeIsTag) and not skipPrintingThisNode then
+      if nodeContainsText(node) and not skipPrintingThisNode then
         local isTokenFollowedByOpener = isTokenNode(node) and nextTextNode and isParenOpener(nextTextNode)
         local isParenCloserFollowedByText = isParenCloser(node)
           and nextTextNode
@@ -4183,9 +4178,7 @@ local function formatNodes(nodesArr, parsedNs)
         local addSpaceAfterThisNode = isTokenFollowedByOpener or isParenCloserFollowedByText
 
         local nodeTxt = node.text
-        if currentNodeIsTag then
-          nodeTxt = "#"
-        elseif isCommentNode(node) then
+        if isCommentNode(node) then
           if commentNeedsSpaceInside(nodeTxt) then
             nodeTxt = strReplaceFirst(nodeTxt, "^(;+)([^ ])", "%1 %2") -- Lua regex syntax
           end
