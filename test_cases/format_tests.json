@@ -445,6 +445,21 @@
     "expected": "(def my-vec\n  [a \"a\"\n   b \"b\"\n   ;; foo\n   ;; bar\n   ,])"
   },
   {
+    "name": "GitHub Issue #165 - tag literal alignment 1",
+    "input": "(case\n  #uuid \"96bbb029-40e7-4566-83d5-7e6088a908fc\" :a\n  ;; a comment\n  #uuid \"148ccf8b-6122-4435-9a39-001e13a8aad7\" :b)",
+    "expected": "(case\n  #uuid \"96bbb029-40e7-4566-83d5-7e6088a908fc\" :a\n  ;; a comment\n  #uuid \"148ccf8b-6122-4435-9a39-001e13a8aad7\" :b)"
+  },
+  {
+    "name": "GitHub Issue #165 - tag literal alignment 2",
+    "input": "(foo bar #aaa \"aaa\"\n              ;; bbb\n           :ccc)\n\n(foo bar #aaa \"aaa\"\n         ;; bbb\n         :ccc)\n\n  (foo\n        #aaa \"aaa\")",
+    "expected": "(foo bar #aaa \"aaa\"\n              ;; bbb\n              :ccc)\n\n(foo bar #aaa \"aaa\"\n         ;; bbb\n         :ccc)\n\n(foo\n  #aaa \"aaa\")"
+  },
+  {
+    "name": "GitHub Issue #169 examples",
+    "input": "(filter\n  #(not= 1 %) [1 2 3])\n\n(let [result (filter\n            #(not= 1 %) [123])]\n  result)\n\n(let [result (->>\n            (filter\n             #(not= 1 %) [123]))]\n  result)",
+    "expected": "(filter\n  #(not= 1 %) [1 2 3])\n\n(let [result (filter\n               #(not= 1 %) [123])]\n  result)\n\n(let [result (->>\n               (filter\n                 #(not= 1 %) [123]))]\n  result)"
+  },
+  {
     "name": "Simple namespace",
     "input": "(ns aaa)",
     "expected": "(ns aaa)"
@@ -803,6 +818,16 @@
     "name": "GitHub Issue #158 - ClojureScript require default",
     "input": "(ns com.example.my-app\n  (:require\n       [\"react-select\" :default Select]\n       [\"react-dropzone\" :default Dropzone]\n       [\"react-select/creatable\" :default CreatableSelect]))",
     "expected": "(ns com.example.my-app\n  (:require\n   [\"react-dropzone\" :default Dropzone]\n   [\"react-select\" :default Select]\n   [\"react-select/creatable\" :default CreatableSelect]))"
+  },
+  {
+    "name": "GitHub Issue #166 - :require :refer :all bug 1",
+    "input": "(ns com.example.my-app\n  (:require [other :refer :all :rename {foo bar}]))",
+    "expected": "(ns com.example.my-app\n  (:require\n   [other :refer :all :rename {foo bar}]))"
+  },
+  {
+    "name": "GitHub Issue #166 - :require :refer :all bug 2",
+    "input": "(ns com.example.my-app\n  (:require [other :rename {foo bar} :refer :all]))",
+    "expected": "(ns com.example.my-app\n  (:require\n   [other :refer :all :rename {foo bar}]))"
   },
   {
     "name": "Trim trailing whitespace 1",

@@ -343,5 +343,15 @@
     "name": "GitHub Issue #158 - ClojureScript require default",
     "input": "(ns com.example.my-app\n  (:require\n       [\"react-dropzone\" :default Dropzone]\n       [\"react-select\" :default Select]\n       [\"react-select/creatable\" :default CreatableSelect]))",
     "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"\\\"react-dropzone\\\"\",\n      \"symbolIsString\": true,\n      \"default\": \"Dropzone\"\n    },\n    {\n      \"symbol\": \"\\\"react-select\\\"\",\n      \"symbolIsString\": true,\n      \"default\": \"Select\"\n    },\n    {\n      \"symbol\": \"\\\"react-select/creatable\\\"\",\n      \"symbolIsString\": true,\n      \"default\": \"CreatableSelect\"\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #166 - :require :refer :all bug 1",
+    "input": "(ns com.example.my-app\n  (:require [other :refer :all :rename {foo bar}]))",
+    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"other\",\n      \"refer\": \"all\",\n      \"rename\": [\n        {\n          \"fromSymbol\": \"foo\",\n          \"toSymbol\": \"bar\"\n        }\n      ]\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #166 - :require :refer :all bug 2",
+    "input": "(ns com.example.my-app\n  (:require [other :rename {foo bar} :refer :all]))",
+    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"other\",\n      \"refer\": \"all\",\n      \"rename\": [\n        {\n          \"fromSymbol\": \"foo\",\n          \"toSymbol\": \"bar\"\n        }\n      ]\n    }\n  ]\n}"
   }
 ]
