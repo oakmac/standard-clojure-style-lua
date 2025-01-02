@@ -415,7 +415,6 @@ local function String(opts)
   }
 end
 
--- FIXME: rename to "Pattern"
 local function Pattern(opts)
   return {
     name = opts.name,
