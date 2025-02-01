@@ -4,6 +4,10 @@ This is a port of [Standard Clojure Style] in Lua 🌙
 
 [Standard Clojure Style]:https://github.com/oakmac/standard-clojure-style-js
 
+## Editor Integrations
+
+- [Neovim plugin](https://git.sr.ht/~ioiojo/standard-clojure-style.nvim)
+
 ## Development
 
 Make sure [lua] and [Stylua] are installed.
