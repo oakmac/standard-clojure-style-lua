@@ -455,6 +455,16 @@
     "expected": "(foo bar #aaa \"aaa\"\n              ;; bbb\n              :ccc)\n\n(foo bar #aaa \"aaa\"\n         ;; bbb\n         :ccc)\n\n(foo\n  #aaa \"aaa\")"
   },
   {
+    "name": "GitHub Issue #178 - ns symbol with no ns form",
+    "input": "(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
+    "expected": "(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))"
+  },
+  {
+    "name": "GitHub Issue #178 - ns symbol with ns form",
+    "input": "  (ns\n\ncom.example.my-app)\n\n(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
+    "expected": "(ns com.example.my-app)\n\n(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))"
+  },
+  {
     "name": "Simple namespace",
     "input": "(ns aaa)",
     "expected": "(ns aaa)"
@@ -823,6 +833,16 @@
     "name": "GitHub Issue #166 - :require :refer :all bug 2",
     "input": "(ns com.example.my-app\n  (:require [other :rename {foo bar} :refer :all]))",
     "expected": "(ns com.example.my-app\n  (:require\n   [other :refer :all :rename {foo bar}]))"
+  },
+  {
+    "name": "GitHub Issue #152 - :use outside of the ns form should work normally",
+    "input": "(ns com.example.my-app)\n\n  (use 'com.example.foo)",
+    "expected": "(ns com.example.my-app)\n\n(use 'com.example.foo)"
+  },
+  {
+    "name": "GitHub Issue #152 - use symbol inside the ns form is ok",
+    "input": "(ns com.example.my-app\n  (:require\n    [com.example.my-app.util :refer [use abc]\n    ]))",
+    "expected": "(ns com.example.my-app\n  (:require\n   [com.example.my-app.util :refer [abc use]]))"
   },
   {
     "name": "Trim trailing whitespace 1",
