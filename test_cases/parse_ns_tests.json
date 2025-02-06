@@ -353,5 +353,15 @@
     "name": "GitHub Issue #166 - :require :refer :all bug 2",
     "input": "(ns com.example.my-app\n  (:require [other :rename {foo bar} :refer :all]))",
     "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"other\",\n      \"refer\": \"all\",\n      \"rename\": [\n        {\n          \"fromSymbol\": \"foo\",\n          \"toSymbol\": \"bar\"\n        }\n      ]\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #178 - no ns form",
+    "input": "(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
+    "expected": "{\n  \"nsSymbol\": null\n}"
+  },
+  {
+    "name": "GitHub Issue #178 - with ns form",
+    "input": "(ns com.example.my-app)\n\n(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
+    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\"\n}"
   }
 ]

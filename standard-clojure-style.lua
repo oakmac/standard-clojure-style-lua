@@ -1921,12 +1921,20 @@ local function parseNs(nodesArr)
   local skipNodesUntilWeReachThisId = -1
   local sectionToAttachEolCommentsTo = nil
   local nextTokenIsRequireDefaultSymbol = false
+  local numSymbolsInsideList = 0
 
   while continueParsingNsForm do
     local node = nodesArr[idx]
     local currentNodeIsNewline = isNewlineNode(node)
+    local isTokenNode2 = isTokenNode(node)
+    local isTextNode = nodeContainsText(node)
+    local nodeHasNonBlankText = isNodeWithNonBlankText(node)
 
-    if parenNestingDepth == 1 and isNsNode(node) then
+    if parenNestingDepth >= 1 and isTokenNode2 and nodeHasNonBlankText then
+      numSymbolsInsideList = inc(numSymbolsInsideList)
+    end
+
+    if parenNestingDepth == 1 and isNsNode(node) and numSymbolsInsideList == 1 then
       insideNsForm = true
       nextTextNodeIsNsSymbol = true
       nsNodeIdx = idx
@@ -1967,6 +1975,9 @@ local function parseNs(nodesArr)
     if isParenOpener(node) then
       parenNestingDepth = inc(parenNestingDepth)
       stackPush(parenStack, node)
+
+      numSymbolsInsideList = 0
+
       if insideNsForm and isReaderConditionalOpener(node) then
         insideReaderConditional = true
         currentReaderConditionalPlatform = nil
@@ -2051,8 +2062,6 @@ local function parseNs(nodesArr)
       requireMacrosRenameIdx = -1
     end
 
-    local isTokenNode2 = isTokenNode(node)
-    local isTextNode = nodeContainsText(node)
     local isCommentNode2 = isCommentNode(node)
     local isReaderCommentNode2 = isReaderCommentNode(node)
 
@@ -3773,6 +3782,7 @@ end
 -- and ns form parsed.
 local function formatNodes(nodesArr, parsedNs)
   local numNodes = arraySize(nodesArr)
+  local hasParsedNsForm = not not parsedNs.nsSymbol
 
   local parenNestingDepth = 0
   local idx = 1
@@ -3824,7 +3834,7 @@ local function formatNodes(nodesArr, parsedNs)
         nodesArr = recordOriginalColIndexes(nodesArr, idx)
       end
 
-      if nsStartStringIdx == -1 and parenNestingDepth == 1 and isNsNode(node) then
+      if nsStartStringIdx == -1 and parenNestingDepth == 1 and hasParsedNsForm and isNsNode(node) then
         insideNsForm = true
         nsStartStringIdx = strLen(strConcat(outTxt, lineTxt))
       end

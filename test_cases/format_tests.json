@@ -455,6 +455,16 @@
     "expected": "(foo bar #aaa \"aaa\"\n              ;; bbb\n              :ccc)\n\n(foo bar #aaa \"aaa\"\n         ;; bbb\n         :ccc)\n\n(foo\n  #aaa \"aaa\")"
   },
   {
+    "name": "GitHub Issue #178 - ns symbol with no ns form",
+    "input": "(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
+    "expected": "(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))"
+  },
+  {
+    "name": "GitHub Issue #178 - ns symbol with ns form",
+    "input": "  (ns\n\ncom.example.my-app)\n\n(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
+    "expected": "(ns com.example.my-app)\n\n(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))"
+  },
+  {
     "name": "Simple namespace",
     "input": "(ns aaa)",
     "expected": "(ns aaa)"
