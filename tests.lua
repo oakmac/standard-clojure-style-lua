@@ -858,6 +858,8 @@ end
 -- -----------------------------------------------------------------------------
 -- Parser
 
+TestCases = {}
+
 local parserTestsToSkip = {
   ["String with emoji"] = true,
 }
@@ -867,7 +869,7 @@ local parserTestsToSkip = {
 -- 0-index based. In the nodeToString function we subtract 1 from the parsed result.
 local parserTestCases = json.decode(readFile("./test_cases/parser_tests.json"))
 
-function testParser()
+function TestCases:testParser()
   lu.assertTrue(isArray(parserTestCases), "parser_tests.json is not an Array")
 
   for _key, testCase in pairs(parserTestCases) do
@@ -891,16 +893,13 @@ end
 
 -- -----------------------------------------------------------------------------
 -- Parse ns
-
 local parseNsTestsToSkip = {
   -- ["test case here"] = true,
 }
-
 local parseNsTestCases = json.decode(readFile("./test_cases/parse_ns_tests.json"))
 
-function testParser()
+function TestCases:testParseNs()
   lu.assertTrue(isArray(parseNsTestCases), "parse_ns_tests.json is not an Array")
-
   for _key, testCase in pairs(parseNsTestCases) do
     if not parseNsTestsToSkip[testCase.name] then
       lu.assertTrue(isNonBlankString(testCase.name), "test case .name is empty")
@@ -913,27 +912,52 @@ function testParser()
 
       local inputNodes = scsLib.parse(testCase.input)
       lu.assertTable(inputNodes, "parse_ns test case " .. testCase.name .. " - inputNodes not a table")
+
       local flatNodes = scsLib._flattenTree(inputNodes)
       lu.assertTable(flatNodes, "parse_ns test case " .. testCase.name .. " - flatNodes not a table")
-      local parsedNs = scsLib.parseNs(flatNodes)
-      lu.assertTable(parsedNs, "parse_ns test case " .. testCase.name .. " - parsed result is not a table")
 
-      -- compare the two structures
-      local resultIsTheSame = deepCompare(parsedNs, expectedStructure)
+      -- Wrap the parsing step in pcall to handle expected errors
+      local success, result = pcall(function()
+        local parsedNs = scsLib.parseNs(flatNodes)
 
-      if not resultIsTheSame then
-        print("")
-        print("parseNs structure does not match: " .. testCase.name)
-        print("")
-        print("Expected:")
-        print(inspect(expectedStructure))
-        print("")
-        print("Actual:")
-        print(inspect(parsedNs))
-        print("")
+        -- If we were expecting an error but got success, fail
+        if expectedStructure.parsingShouldError then
+          lu.fail("parse_ns " .. testCase.name .. " - expected parsing error but got success")
+        end
+
+        lu.assertTable(parsedNs, "parse_ns test case " .. testCase.name .. " - parsed result is not a table")
+
+        -- compare the two structures
+        local resultIsTheSame = deepCompare(parsedNs, expectedStructure)
+        if not resultIsTheSame then
+          print("")
+          print("parseNs structure does not match: " .. testCase.name)
+          print("")
+          print("Expected:")
+          print(inspect(expectedStructure))
+          print("")
+          print("Actual:")
+          print(inspect(parsedNs))
+          print("")
+          lu.fail("parse_ns " .. testCase.name .. " - structure does not match")
+        end
+      end)
+
+      -- Handle parse errors
+      if not success then
+        -- If we weren't expecting an error, fail the test
+        if not expectedStructure.parsingShouldError then
+          lu.fail("parse_ns " .. testCase.name .. " - unexpected parsing error: " .. result)
+        end
+
+        -- Verify the error message matches what we expected
+        local errorMessageLooksCorrect = scsLib._strIncludes(result, expectedStructure.errorMessage)
+        if not errorMessageLooksCorrect then
+          print("Expected error message:", expectedStructure.errorMessage)
+          print("But got:", result)
+        end
+        lu.assertTrue(errorMessageLooksCorrect, "Error Message does not match")
       end
-
-      lu.assertTrue(resultIsTheSame, "parse_ns " .. testCase.name .. " - structure does not match")
     end
   end
 end
@@ -949,7 +973,7 @@ local formatTestsToSkip = {
 local formatTestCases = json.decode(readFile("./test_cases/format_tests.json"))
 local whitespaceTestsExist = false
 
-function testParser()
+function TestCases:testFormat()
   lu.assertTrue(isArray(formatTestCases), "format_tests.json is not an Array")
 
   for _key, testCase in pairs(formatTestCases) do
