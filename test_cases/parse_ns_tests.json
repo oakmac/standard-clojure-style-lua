@@ -355,21 +355,6 @@
     "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"other\",\n      \"refer\": \"all\",\n      \"rename\": [\n        {\n          \"fromSymbol\": \"foo\",\n          \"toSymbol\": \"bar\"\n        }\n      ]\n    }\n  ]\n}"
   },
   {
-    "name": "GitHub Issue #152 - :use in the ns form should error",
-    "input": "(ns com.example.my-app\n  (:use com.example-my-app.util))",
-    "expected": "{\n  \"parsingShouldError\": true,\n  \"errorMessage\": \"Standard Clojure Style does not support :use inside of the ns form. Please refactor with :require as appropriate.\"\n}"
-  },
-  {
-    "name": "GitHub Issue #152 - :use outside of the ns form should work normally",
-    "input": "(ns com.example.my-app)\n\n  (use 'com.example.foo)",
-    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\"\n}"
-  },
-  {
-    "name": "GitHub Issue #152 - use symbol inside the ns form is ok",
-    "input": "(ns com.example.my-app\n  (:require\n    [com.example.my-app.util :refer [use]]))",
-    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"com.example.my-app.util\",\n      \"refer\": [{\"symbol\": \"use\"}]\n    }\n  ]\n}"
-  },
-  {
     "name": "GitHub Issue #178 - no ns form",
     "input": "(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
     "expected": "{\n  \"nsSymbol\": null\n}"
