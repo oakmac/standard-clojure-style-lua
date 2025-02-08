@@ -1000,6 +1000,10 @@ local function isNsNode(node)
   return node.name == "token" and node.text == "ns"
 end
 
+local function isUseNode(node)
+  return node and isString(node.text) and (node.text == ":use" or node.text == "use")
+end
+
 local function isRequireNode(node)
   return node and isString(node.text) and (node.text == ":require" or node.text == "require")
 end
@@ -2879,6 +2883,12 @@ local function parseNs(nodesArr)
         end
       end
       -- FIXME: we need to handle :implements, :constructors, :methods, :exposes, :exposes-methods, here
+
+      -- throw an error if we encounter :use
+    elseif insideNsForm and isTokenNode2 and parenNestingDepth >= 1 and isUseNode(node) then
+      error(
+        "Standard Clojure Style does not support :use inside of the ns form. Please refactor with :require as appropriate."
+      )
     end
 
     -- increment the lineNo for the next node if we are on a newline node
