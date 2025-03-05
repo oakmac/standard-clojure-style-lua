@@ -378,5 +378,30 @@
     "name": "GitHub Issue #178 - with ns form",
     "input": "(ns com.example.my-app)\n\n(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))",
     "expected": "{\n  \"nsSymbol\": \"com.example.my-app\"\n}"
+  },
+  {
+    "name": "GitHub Issue #181 - ns metadata hash map with quoted value",
+    "input": "(ns com.example.my-app\n  {:clj-kondo/config '{:linters {:unresolved-symbol {:level :off}}}}\n  (:require [clojure.string :as str]))",
+    "expected": " {\n  \"nsSymbol\": \"com.example.my-app\",\n  \"nsMetadata\": [\n    {\n      \"key\": \":clj-kondo/config\",\n      \"value\": \"'{:linters {:unresolved-symbol {:level :off}}}\"\n    }\n  ],\n  \"requires\": [\n    {\n      \"symbol\": \"clojure.string\",\n      \"as\": \"str\"\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue 184 - Bug: ns metadata tagged literal values printed without hash",
+    "input": "(ns com.example.my-app\n  {:id #uuid \"7f5f474f-1c76-4884-af80-8ebdcf5c9df3\"}\n  (:require [clojure.string :as str]))",
+    "expected": " {\n  \"nsSymbol\": \"com.example.my-app\",\n  \"nsMetadata\": [\n    {\n      \"key\": \":id\",\n      \"value\": \"#uuid \\\"7f5f474f-1c76-4884-af80-8ebdcf5c9df3\\\"\"\n    }\n  ],\n  \"requires\": [\n    {\n      \"symbol\": \"clojure.string\",\n      \"as\": \"str\"\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #183 - handle all types of quoted ns metadata hash map values",
+    "input": "(ns my.namespace\n  {:token 'token\n   :string '\"string\"\n   :parens '(parens)\n   :brackets '[brackets]\n   :braces '{:braces true}\n   :wrap ''wrap\n   :deep-wrap ''''''wrap\n   :meta '^:meta [1 2 3]\n   :tagged ' #tag [1 2 3]}\n  (:require [clojure.string :as str]))",
+    "expected": " {\n  \"nsSymbol\": \"my.namespace\",\n  \"nsMetadata\": [\n    {\n      \"key\": \":token\",\n      \"value\": \"'token\"\n    },\n    {\n      \"key\": \":string\",\n      \"value\": \"'\\\"string\\\"\"\n    },\n    {\n      \"key\": \":parens\",\n      \"value\": \"'(parens)\"\n    },\n    {\n      \"key\": \":brackets\",\n      \"value\": \"'[brackets]\"\n    },\n    {\n      \"key\": \":braces\",\n      \"value\": \"'{:braces true}\"\n    },\n    {\n      \"key\": \":wrap\",\n      \"value\": \"''wrap\"\n    },\n    {\n      \"key\": \":deep-wrap\",\n      \"value\": \"''''''wrap\"\n    },\n    {\n      \"key\": \":meta\",\n      \"value\": \"'^:meta [1 2 3]\"\n    },\n    {\n      \"key\": \":tagged\",\n      \"value\": \"' #tag [1 2 3]\"\n    }\n  ],\n  \"requires\": [\n    {\n      \"symbol\": \"clojure.string\",\n      \"as\": \"str\"\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #187 - :require with :refer and :rename",
+    "input": "(ns com.example.my-app\n  (:require\n   [foo.bar :rename {ccc ddd, aaa bbb} :refer [zzz xxx yyy]]\n   [biz.baz :refer [iii jjj] :rename {ooo ppp qqq rrr}]\n   ))",
+    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"biz.baz\",\n      \"refer\": [\n        {\"symbol\": \"iii\"},\n        {\"symbol\": \"jjj\"}\n      ],\n      \"rename\": [\n        {\n          \"fromSymbol\": \"ooo\",\n          \"toSymbol\": \"ppp\"\n        },\n        {\n          \"fromSymbol\": \"qqq\",\n          \"toSymbol\": \"rrr\"\n        }\n      ]\n    },\n    {\n      \"symbol\": \"foo.bar\",\n      \"refer\": [\n        {\"symbol\": \"xxx\"},\n        {\"symbol\": \"yyy\"},\n        {\"symbol\": \"zzz\"}\n      ],\n      \"rename\": [\n        {\n          \"fromSymbol\": \"aaa\",\n          \"toSymbol\": \"bbb\"\n        },\n        {\n          \"fromSymbol\": \"ccc\",\n          \"toSymbol\": \"ddd\"\n        }\n      ]\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #191 - expand nested prefix lists",
+    "input": "(ns com.example.my-app\n  (:require\n   [com.example.my-app.foo\n    [bar :as bar]\n    [baz :refer [qux]]]))",
+    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"com.example.my-app.foo.bar\",\n      \"as\": \"bar\"\n    },\n    {\n      \"symbol\": \"com.example.my-app.foo.baz\",\n      \"refer\": [\n        {\"symbol\": \"qux\"}\n      ]\n    }\n  ]\n}"
   }
 ]
