@@ -2117,10 +2117,6 @@ local function parseNs(nodesArr)
         requireExcludeSymbolParenDepth = -1
       end
 
-      if insideRequireForm and parenNestingDepth < renameParenNestingDepth then
-        renameParenNestingDepth = -1
-      end
-
       requireMacrosReferNodeIdx = -1
       requireMacrosRenameIdx = -1
     end
@@ -2606,8 +2602,8 @@ local function parseNs(nodesArr)
       result.requires[activeRequireIdx].default = node.text
       nextTokenIsRequireDefaultSymbol = false
 
-    -- :rename inside require
-    elseif insideRequireForm and insideRequireList and idx > requireNodeIdx and isRenameKeyword(node) then
+    -- :rename keyword inside a :require list
+    elseif insideRequireForm and insideRequireList and renameIdx == -1 and isRenameKeyword(node) then
       renameIdx = idx
       renameParenNestingDepth = parenNestingDepth
       renamesTmp = {}
