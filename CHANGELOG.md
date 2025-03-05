@@ -38,7 +38,8 @@ All notable changes to this project will be documented in this file.
 [Standard Clojure Style JS Issue #165]:https://github.com/oakmac/standard-clojure-style-js/issues/165
 [Standard Clojure Style JS Issue #166]:https://github.com/oakmac/standard-clojure-style-js/issues/166
 
-[Unreleased]:https://github.com/oakmac/standard-clojure-style-lua/compare/v0.20.0...HEAD
+[Unreleased]:https://github.com/oakmac/standard-clojure-style-lua/compare/v0.24.0...HEAD
+[0.24.0]:https://github.com/oakmac/standard-clojure-style-lua/releases/tag/v0.24.0
 [0.20.0]:https://github.com/oakmac/standard-clojure-style-lua/releases/tag/v0.20.0
 [0.18.0]:https://github.com/oakmac/standard-clojure-style-lua/releases/tag/v0.18.0
 [0.16.0]:https://github.com/oakmac/standard-clojure-style-lua/releases/tag/v0.16.0
