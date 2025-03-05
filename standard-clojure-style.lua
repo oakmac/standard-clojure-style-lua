@@ -1142,25 +1142,37 @@ local function nodeContainsTextAndNotWhitespace(n)
   return nodeContainsText(n) and not isWhitespaceNode(n)
 end
 
-local function isOneSpaceOpener(opener)
-  -- TODO: also check node type here?
-  return opener.text == "{" or opener.text == "["
+local function isMapLiteralOpener(n)
+  return n and n.name == ".open" and n.text == "{"
 end
 
-local function isAnonFnOpener(opener)
-  return opener.text == "#("
+local function isVectorLiteralOpener(n)
+  return n and n.name == ".open" and n.text == "["
 end
 
-function isNamespacedMapOpener(opener)
-  return opener.name == ".open" and strStartsWith(opener.text, "#:") and strEndsWith(opener.text, "{")
+local function isSingleParenOpener(n)
+  return n and n.name == ".open" and n.text == "("
 end
 
-local function isReaderConditionalOpener(opener)
-  return opener.text == "#?(" or opener.text == "#?@("
+local function isAnonFnOpener(n)
+  return n and n.name == ".open" and n.text == "#("
+end
+
+local function isSetLiteralOpener(n)
+  return n and n.name == ".open" and n.text == "#{"
+end
+
+function isNamespacedMapOpener(n)
+  return n and n.name == ".open" and strStartsWith(n.text, "#:") and strEndsWith(n.text, "{")
+end
+
+local function isReaderConditionalOpener(n)
+  return n and n.name == ".open" and (n.text == "#?(" or n.text == "#?@(")
 end
 
 local function isOpeningBraceNode(n)
-  return n.name == "braces"
+  return n
+    and n.name == "braces"
     and isArray(n.children)
     and arraySize(n.children) == 3
     and n.children[3].name == ".close"
@@ -1261,6 +1273,10 @@ end
 local function getTextFromRootNode(rootNode)
   local s = ""
   recurseAllChildren(rootNode, function(n)
+    -- edge case: add '#' text to .tag nodes
+    if isTagNode(n) then
+      s = strConcat(s, "#")
+    end
     if isStringWithChars(n.text) then
       s = strConcat(s, n.text)
     end
@@ -1551,8 +1567,22 @@ local function numSpacesForIndentation(wrappingOpener)
     if isReaderConditionalOpener(wrappingOpener) then
       return directlyUnderneathOpener
     elseif nextNodeAfterOpener and isParenOpener(nextNodeAfterOpener) then
+      if isMapLiteralOpener(wrappingOpener) then
+        return inc(openerColIdx)
+      elseif isVectorLiteralOpener(wrappingOpener) then
+        return inc(openerColIdx)
+      elseif isSingleParenOpener(wrappingOpener) then
+        return inc(openerColIdx)
+      elseif isSetLiteralOpener(wrappingOpener) then
+        return inc(inc(openerColIdx))
+      elseif isAnonFnOpener(wrappingOpener) then
+        return inc(inc(openerColIdx))
+      else
+        error("Error inside numSpacesForIndentation function. This condition should be unreachable.")
+      end
+    elseif isMapLiteralOpener(wrappingOpener) then
       return inc(openerColIdx)
-    elseif isOneSpaceOpener(wrappingOpener) then
+    elseif isVectorLiteralOpener(wrappingOpener) then
       return inc(openerColIdx)
     elseif isAnonFnOpener(wrappingOpener) then
       return openerColIdx + 3
@@ -1892,6 +1922,7 @@ local function parseNs(nodesArr)
   local prevNodeIsNewline = false
   local lineOfLastCommentRecording = -1
   local insidePrefixList = false
+  local prefixListParenNestingDepth = -1
   local prefixListPrefix = nil
   local prefixListLineNo = -1
   local prefixListComments = {}
@@ -1920,8 +1951,8 @@ local function parseNs(nodesArr)
   local genClassValueLineNo = -1
   local insideReaderComment = false
   local idOfLastNodeInsideReaderComment = -1
-  local requireRenameIdx = -1
-  local requireRenameParenNestingDepth = -1
+  local renameIdx = -1
+  local renameParenNestingDepth = -1
   local skipNodesUntilWeReachThisId = -1
   local sectionToAttachEolCommentsTo = nil
   local nextTokenIsRequireDefaultSymbol = false
@@ -1986,7 +2017,7 @@ local function parseNs(nodesArr)
         insideReaderConditional = true
         currentReaderConditionalPlatform = nil
         readerConditionalParenNestingDepth = parenNestingDepth
-      elseif insideRequireForm then
+      elseif insideRequireForm and requireListParenNestingDepth == -1 then
         insideRequireList = true
         requireListParenNestingDepth = parenNestingDepth
       elseif insideImportForm and parenNestingDepth > importNodeParenNestingDepth then
@@ -1996,25 +2027,24 @@ local function parseNs(nodesArr)
       parenNestingDepth = dec(parenNestingDepth)
       stackPop(parenStack)
 
-      -- TODO: should these be "elseif"s or just "if"s ?
-      -- I think maybe they should be "if"s
+      -- We can assume there is only one ns form per file and exit the main
+      -- loop once we have finished parsing it.
+      if insideNsForm and parenNestingDepth == 0 then
+        insideNsForm = false
+        nsFormEndsLineIdx = lineNo
+      end
+
       if insideImportPackageList then
         insideImportPackageList = false
         importPackageListFirstToken = nil
-      elseif insideRequireForm and parenNestingDepth < requireFormParenNestingDepth then
+      end
+      if insideRequireForm and parenNestingDepth < requireFormParenNestingDepth then
         insideRequireForm = false
-      elseif insideRequireList and parenNestingDepth < requireListParenNestingDepth then
-        insideRequireList = false
-        requireListParenNestingDepth = -1
-        requireRenameIdx = -1
-      elseif insideReferClojureForm and parenNestingDepth < referClojureParenNestingDepth then
+        requireFormParenNestingDepth = -1
+      end
+      if insideReferClojureForm and parenNestingDepth < referClojureParenNestingDepth then
         insideReferClojureForm = false
         referClojureNodeIdx = -1
-      elseif insideNsForm and parenNestingDepth == 0 then
-        -- We can assume there is only one ns form per file and exit the main
-        -- loop once we have finished parsing it.
-        insideNsForm = false
-        nsFormEndsLineIdx = lineNo
       end
 
       if insideReferClojureForm and parenNestingDepth <= referClojureParenNestingDepth then
@@ -2023,45 +2053,74 @@ local function parseNs(nodesArr)
         collectReferClojureRenameSymbols = false
       end
 
-      if referIdx > 0 and parenNestingDepth < referParenNestingDepth then
+      -- we are finished collecting :refer symbols
+      if referIdx > 0 and parenNestingDepth <= referParenNestingDepth then
         referIdx = -1
         referParenNestingDepth = -1
         nextTokenIsRequireDefaultSymbol = false
       end
+
+      -- we are finished collecting :rename symbols
+      if renameIdx > 0 and parenNestingDepth <= renameParenNestingDepth then
+        renameIdx = -1
+        renameParenNestingDepth = -1
+      end
+
+      -- we are finished collecting require prefix list symbols
+      if insideRequireList and parenNestingDepth < requireListParenNestingDepth then
+        insideRequireList = false
+        requireListParenNestingDepth = -1
+        nextTokenIsRequireDefaultSymbol = false
+      end
+
       if insideRequireForm and requireSymbolIdx > 0 then
         requireSymbolIdx = -1
       end
-      if insideRequireForm and insidePrefixList then
+
+      if
+        insideRequireForm
+        and insidePrefixList
+        and prefixListParenNestingDepth ~= -1
+        and parenNestingDepth == dec(prefixListParenNestingDepth)
+      then
         insidePrefixList = false
         prefixListPrefix = nil
+        prefixListParenNestingDepth = -1
       end
+
       if insideReaderConditional and parenNestingDepth == dec(readerConditionalParenNestingDepth) then
         insideReaderConditional = false
         currentReaderConditionalPlatform = nil
         readerConditionalParenNestingDepth = -1
       end
+
       if idx > referMacrosIdx and parenNestingDepth <= referMacrosParenNestingDepth then
         referMacrosIdx = -1
         referMacrosParenNestingDepth = -1
       end
+
       if insideImportForm and parenNestingDepth < importNodeParenNestingDepth then
         insideImportForm = false
         importNodeIdx = -1
         importNodeParenNestingDepth = -1
       end
+
       if insideRequireMacrosForm and parenNestingDepth < requireMacrosParenNestingDepth then
         insideRequireMacrosForm = false
         requireMacrosParenNestingDepth = -1
         requireMacrosNodeIdx = -1
         requireMacrosAsNodeIdx = -1
       end
+
       if collectRequireExcludeSymbols and parenNestingDepth < requireExcludeSymbolParenDepth then
         collectRequireExcludeSymbols = false
         requireExcludeSymbolParenDepth = -1
       end
-      if insideRequireForm and parenNestingDepth < requireRenameParenNestingDepth then
-        requireRenameParenNestingDepth = -1
+
+      if insideRequireForm and parenNestingDepth < renameParenNestingDepth then
+        renameParenNestingDepth = -1
       end
+
       requireMacrosReferNodeIdx = -1
       requireMacrosRenameIdx = -1
     end
@@ -2119,10 +2178,16 @@ local function parseNs(nodesArr)
         tmpMetadataKey = ""
         nextTextNodeIsMetadataKey = true
         metadataValueNodeId = -1
+
         -- skip any forward nodes that we have just collected as text
-        if isArray(node.children) then
-          local lastChildNode = arrayLast(node.children)
-          skipNodesUntilWeReachThisId = lastChildNode.id
+        local skipCandidate = node
+        while skipCandidate do
+          if isArray(skipCandidate.children) then
+            skipCandidate = arrayLast(skipCandidate.children)
+            skipNodesUntilWeReachThisId = skipCandidate.id
+          else
+            skipCandidate = nil
+          end
         end
       end
 
@@ -2541,13 +2606,19 @@ local function parseNs(nodesArr)
       result.requires[activeRequireIdx].default = node.text
       nextTokenIsRequireDefaultSymbol = false
 
+    -- :rename inside require
+    elseif insideRequireForm and insideRequireList and idx > requireNodeIdx and isRenameKeyword(node) then
+      renameIdx = idx
+      renameParenNestingDepth = parenNestingDepth
+      renamesTmp = {}
+
     -- collect :require renames
     elseif
       insideRequireForm
       and insideRequireList
-      and requireRenameIdx > 0
-      and idx > requireRenameIdx
-      and parenNestingDepth > requireRenameParenNestingDepth
+      and renameIdx > 0
+      and idx > renameIdx
+      and parenNestingDepth > renameParenNestingDepth
       and isTokenNode2
       and isTextNode
     then
@@ -2650,6 +2721,8 @@ local function parseNs(nodesArr)
       insideRequireForm
       and insideRequireList
       and idx > requireNodeIdx
+      and referIdx == -1
+      and renameIdx == -1
       and isTokenNode2
       and isTextNode
       and requireSymbolIdx == -1
@@ -2671,6 +2744,7 @@ local function parseNs(nodesArr)
 
       if isPrefixList then
         local prefixListId = createId()
+        prefixListParenNestingDepth = parenNestingDepth
         insidePrefixList = true
         prefixListLineNo = lineNo
         prefixListPrefix = node.text
@@ -2711,12 +2785,6 @@ local function parseNs(nodesArr)
           result.requires[activeRequireIdx].platform = currentReaderConditionalPlatform
         end
       end
-
-    -- :rename inside require
-    elseif insideRequireForm and insideRequireList and idx > requireNodeIdx and isRenameKeyword(node) then
-      requireRenameIdx = idx
-      requireRenameParenNestingDepth = parenNestingDepth
-      renamesTmp = {}
 
     -- collect require Strings in ClojureScript
     elseif insideRequireForm and insideRequireList and idx > requireNodeIdx and isStringNode(node) then

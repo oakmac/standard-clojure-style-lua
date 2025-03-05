@@ -465,6 +465,56 @@
     "expected": "(ns com.example.my-app)\n\n(defn ns\n  \"(:load ...)\"\n  []\n  (println \"boop\"))"
   },
   {
+    "name": "GitHub Issue #189 - set alignment bug 1",
+    "input": "#{1\n  2\n  3\n  4}",
+    "expected": "#{1\n  2\n  3\n  4}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 2",
+    "input": "#{[1]\n  [2]\n  [3]\n  [4]}",
+    "expected": "#{[1]\n  [2]\n  [3]\n  [4]}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 3",
+    "input": "#{1\n  [2]\n  3\n  [4]\n  5}",
+    "expected": "#{1\n  [2]\n  3\n  [4]\n  5}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 4",
+    "input": "#{[1]\n  2\n  [3]\n  4\n  [5]}",
+    "expected": "#{[1]\n  2\n  [3]\n  4\n  [5]}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 5",
+    "input": "#{{:a \"a\"}\n  :b\n  [:c]}",
+    "expected": "#{{:a \"a\"}\n  :b\n  [:c]}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 6",
+    "input": "(defn nested []\n  #{{:a \"a\"}\n    :b\n    [:c]})",
+    "expected": "(defn nested []\n  #{{:a \"a\"}\n    :b\n    [:c]})"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 7",
+    "input": "#{#(:aaa %)\n :b\n #(:ccc %)}",
+    "expected": "#{#(:aaa %)\n  :b\n  #(:ccc %)}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 8",
+    "input": "#{#{\"a\"} :a\n :b\n #(:ccc %)\n }",
+    "expected": "#{#{\"a\"} :a\n  :b\n  #(:ccc %)}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 9",
+    "input": "#{#?(:clj \"a\"\n    :cljs \"b\")\n :b\n #(:ccc %)\n }",
+    "expected": "#{#?(:clj \"a\"\n     :cljs \"b\")\n  :b\n  #(:ccc %)}"
+  },
+  {
+    "name": "GitHub Issue #189 - set alignment bug 10",
+    "input": "#{ #:xyz{ #:aaa{:a \"a\"\n     :b \"b\"} }\n          :ccc\n  :ddd\n }",
+    "expected": "#{#:xyz{#:aaa{:a \"a\"\n              :b \"b\"}}\n  :ccc\n  :ddd}"
+  },
+  {
     "name": "Simple namespace",
     "input": "(ns aaa)",
     "expected": "(ns aaa)"
@@ -843,6 +893,26 @@
     "name": "GitHub Issue #152 - use symbol inside the ns form is ok",
     "input": "(ns com.example.my-app\n  (:require\n    [com.example.my-app.util :refer [use abc]\n    ]))",
     "expected": "(ns com.example.my-app\n  (:require\n   [com.example.my-app.util :refer [abc use]]))"
+  },
+  {
+    "name": "GitHub Issue #181 - ns metadata hash map with quoted value",
+    "input": "(ns com.example.my-app\n  {:clj-kondo/config '{:linters {:unresolved-symbol {:level :off}}}}\n  (:require [clojure.string :as str]))",
+    "expected": "(ns com.example.my-app\n  {:clj-kondo/config '{:linters {:unresolved-symbol {:level :off}}}}\n  (:require\n   [clojure.string :as str]))"
+  },
+  {
+    "name": "GitHub Issue #187 - :require with :refer and :rename 1",
+    "input": "(ns com.example.my-app\n  (:require\n   [foo.bar :rename {ccc ddd, aaa bbb} :refer [zzz xxx yyy]]\n   [biz.baz :refer [iii jjj] :rename {ooo ppp qqq rrr}]\n   ))",
+    "expected": "(ns com.example.my-app\n  (:require\n   [biz.baz :refer [iii jjj] :rename {ooo ppp, qqq rrr}]\n   [foo.bar :refer [xxx yyy zzz] :rename {aaa bbb, ccc ddd}]))"
+  },
+  {
+    "name": "GitHub Issue #187 - :require with :refer and :rename 2",
+    "input": "(ns com.example.my-app\n  (:require\n    [garden.selectors :refer [&] :rename {& parent}]\n    ))",
+    "expected": "(ns com.example.my-app\n  (:require\n   [garden.selectors :refer [&] :rename {& parent}]))"
+  },
+  {
+    "name": "GitHub Issue #191 - expand nested prefix lists",
+    "input": "(ns com.example.my-app\n  (:require\n   [com.example.my-app.foo\n    [bar :as bar :refer [fred]] ;; a comment\n    [baz :refer [qux] :as plugh]])) ;; another comment",
+    "expected": "(ns com.example.my-app\n  (:require\n   [com.example.my-app.foo.bar :as bar :refer [fred]] ;; a comment\n   [com.example.my-app.foo.baz :as plugh :refer [qux]])) ;; another comment"
   },
   {
     "name": "Trim trailing whitespace 1",
