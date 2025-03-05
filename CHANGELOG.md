@@ -2,11 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+> NOTE: some releases will skip version numbers in order to keep this library in sync with Standard Clojure Style JavaScript
+
 ## [Unreleased]
 
-## [0.20.0] - 2025-02-08
+## [0.24.0] - 2025-03-05
 
-> NOTE: v0.19.0 has been skipped in order to keep this library in sync with Standard Clojure Style JavaScript
+### Fixed
+- catch-up with functionality of Standard Clojure Style JavaScript v0.24.0 ([PR-18])
+
+## [0.20.0] - 2025-02-08
 
 ### Fixed
 - [Issue #14] - error on `:use` inside of `ns` form ([PR-17])
@@ -50,3 +55,4 @@ All notable changes to this project will be documented in this file.
 [PR-13]:https://github.com/oakmac/standard-clojure-style-lua/pull/13
 [PR-16]:https://github.com/oakmac/standard-clojure-style-lua/pull/16
 [PR-17]:https://github.com/oakmac/standard-clojure-style-lua/pull/17
+[PR-18]:https://github.com/oakmac/standard-clojure-style-lua/pull/18
