@@ -403,5 +403,15 @@
     "name": "GitHub Issue #191 - expand nested prefix lists",
     "input": "(ns com.example.my-app\n  (:require\n   [com.example.my-app.foo\n    [bar :as bar]\n    [baz :refer [qux]]]))",
     "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"symbol\": \"com.example.my-app.foo.bar\",\n      \"as\": \"bar\"\n    },\n    {\n      \"symbol\": \"com.example.my-app.foo.baz\",\n      \"refer\": [\n        {\"symbol\": \"qux\"}\n      ]\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #203 - default keyword with as",
+    "input": "(ns com.example.my-app\n  (:require\n    [\"foo-bar\" :default Foobar :as fb]\n    [\"bar-foo\" :as bf :default Barfoo]\n    ))",
+    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"requires\": [\n    {\n      \"as\": \"bf\",\n      \"default\": \"Barfoo\",\n      \"symbol\": \"\\\"bar-foo\\\"\",\n      \"symbolIsString\": true\n    },\n    {\n      \"as\": \"fb\",\n      \"default\": \"Foobar\",\n      \"symbol\": \"\\\"foo-bar\\\"\",\n      \"symbolIsString\": true\n    }\n  ]\n}"
+  },
+  {
+    "name": "GitHub Issue #208 - implements",
+    "input": "(ns com.example.my-app\n  (:gen-class\n   :implements [zap.zip.RockSock foo.bar.BizBang]))",
+    "expected": "{\n  \"nsSymbol\": \"com.example.my-app\",\n  \"genClass\": {\n    \"isEmpty\": false,\n    \"implements\": [\n      {\"symbol\": \"foo.bar.BizBang\"},\n      {\"symbol\": \"zap.zip.RockSock\"}\n    ]\n  }\n}"
   }
 ]

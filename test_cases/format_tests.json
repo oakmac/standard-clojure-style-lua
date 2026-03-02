@@ -915,6 +915,21 @@
     "expected": "(ns com.example.my-app\n  (:require\n   [com.example.my-app.foo.bar :as bar :refer [fred]] ;; a comment\n   [com.example.my-app.foo.baz :as plugh :refer [qux]])) ;; another comment"
   },
   {
+    "name": "GitHub Issue #203 - default keyword with as",
+    "input": "(ns com.example.my-app\n  (:require\n    [\"foo-bar\" :default Foobar :as fb]\n    [\"bar-foo\" :as bf :default Barfoo]\n    ))",
+    "expected": "(ns com.example.my-app\n  (:require\n   [\"bar-foo\" :as bf :default Barfoo]\n   [\"foo-bar\" :as fb :default Foobar]))"
+  },
+  {
+    "name": "GitHub Issue #208 - basic :gen-class :implements",
+    "input": "(ns example-ns\n  (:gen-class\n   :implements [com.amazonaws.services.lambda.runtime.RequestStreamHandler]))",
+    "expected": "(ns example-ns\n  (:gen-class\n   :implements [com.amazonaws.services.lambda.runtime.RequestStreamHandler]))"
+  },
+  {
+    "name": "GitHub Issue #208 - :gen-class :implements with sorting",
+    "input": "(ns com.example.my-app\n  \"complex gen-class\"\n  ;; aaa\n  ;; bbb\n  (:gen-class ;; ccc\n:implements [zap.zip.RockSock foo.bar.BizBang] ;; uuu\n\n    ;; fff\n    :extends java.lang.RuntimeException ;; ggg\n    :impl-ns iii\n    :post-init jjj\n    :main true\n    :state state2\n    :prefix \"zzz-\"\n\n    ;; ddd\n    :name name2 ;; eee\n\n    :factory fff\n    :load-impl-ns false ;; hhh\n    :init init2)\n\n\n  (:require [aaa.bbb :as ab])\n  )",
+    "expected": "(ns com.example.my-app\n  \"complex gen-class\"\n  (:require\n   [aaa.bbb :as ab])\n  ;; aaa\n  ;; bbb\n  (:gen-class ;; ccc\n   ;; ddd\n   :name name2 ;; eee\n   ;; fff\n   :extends java.lang.RuntimeException ;; ggg\n   :implements [foo.bar.BizBang zap.zip.RockSock] ;; uuu\n   :init init2\n   :post-init jjj\n   :main true\n   :factory fff\n   :state state2\n   :prefix \"zzz-\"\n   :impl-ns iii\n   :load-impl-ns false)) ;; hhh"
+  },
+  {
     "name": "Trim trailing whitespace 1",
     "input": "(def aaa \"aaa\")   ",
     "expected": "(def aaa \"aaa\")"

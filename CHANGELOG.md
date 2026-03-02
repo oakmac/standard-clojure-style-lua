@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-03-02
+
+### Fixed
+- catch-up with functionality of Standard Clojure Style JavaScript v0.26.0 ([PR-18])
+
 ## [0.24.0] - 2025-03-05
 
 ### Fixed
