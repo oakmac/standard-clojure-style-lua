@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 ## [0.26.0] - 2026-03-02
 
 ### Fixed
-- catch-up with functionality of Standard Clojure Style JavaScript v0.26.0 ([PR-18])
+- catch-up with functionality of Standard Clojure Style JavaScript v0.26.0 ([PR-20])
 
 ## [0.24.0] - 2025-03-05
 
@@ -62,3 +62,4 @@ All notable changes to this project will be documented in this file.
 [PR-16]:https://github.com/oakmac/standard-clojure-style-lua/pull/16
 [PR-17]:https://github.com/oakmac/standard-clojure-style-lua/pull/17
 [PR-18]:https://github.com/oakmac/standard-clojure-style-lua/pull/18
+[PR-20]:https://github.com/oakmac/standard-clojure-style-lua/pull/20
