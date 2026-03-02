@@ -1,5 +1,5 @@
 -- standard-clojure-style.lua - an implementation of Standard Clojure Style in Lua
--- v0.24.0
+-- v0.26.0
 -- https://github.com/oakmac/standard-clojure-style-lua
 --
 -- Copyright (c) 2024, Chris Oakman
@@ -11,7 +11,7 @@ local appendChildren, formatRenamesList, getParser, inc, isNamespacedMapOpener, 
 
 -- exported module table
 local M = {}
-M.version = "0.24.0"
+M.version = "0.26.0"
 
 -- -----------------------------------------------------------------------------
 -- Development Helpers
@@ -1707,6 +1707,11 @@ local function sortNsResult(result, prefixListComments)
     table.sort(result.referClojure.rename, compareFromSymbol)
   end
 
+  -- sort :gen-class :implements
+  if result.genClass and isArray(result.genClass.implements) then
+    table.sort(result.genClass.implements, compareSymbolsThenPlatform)
+  end
+
   -- sort :require-macros symbols
   if isArray(result.requireMacros) then
     table.sort(result.requireMacros, compareSymbolsThenPlatform)
@@ -1957,6 +1962,8 @@ local function parseNs(nodesArr)
   local sectionToAttachEolCommentsTo = nil
   local nextTokenIsRequireDefaultSymbol = false
   local numSymbolsInsideList = 0
+  local insideGenClassImplements = false
+  local genClassImplementsParenDepth = -1
 
   while continueParsingNsForm do
     local node = nodesArr[idx]
@@ -2022,6 +2029,12 @@ local function parseNs(nodesArr)
         requireListParenNestingDepth = parenNestingDepth
       elseif insideImportForm and parenNestingDepth > importNodeParenNestingDepth then
         insideImportPackageList = true
+      elseif insideGenClass and genClassToggle == 1 and genClassKeyStr == "implements" then
+        insideGenClassImplements = true
+        genClassImplementsParenDepth = parenNestingDepth
+        if not isArray(result.genClass.implements) then
+          result.genClass.implements = {}
+        end
       end
     elseif isParenCloser(node) then
       parenNestingDepth = dec(parenNestingDepth)
@@ -2115,6 +2128,13 @@ local function parseNs(nodesArr)
       if collectRequireExcludeSymbols and parenNestingDepth < requireExcludeSymbolParenDepth then
         collectRequireExcludeSymbols = false
         requireExcludeSymbolParenDepth = -1
+      end
+
+      if insideGenClassImplements and parenNestingDepth < genClassImplementsParenDepth then
+        insideGenClassImplements = false
+        genClassImplementsParenDepth = -1
+        genClassToggle = 0 -- back to looking for a :gen-class key
+        genClassValueLineNo = lineNo
       end
 
       requireMacrosReferNodeIdx = -1
@@ -2872,6 +2892,23 @@ local function parseNs(nodesArr)
         stackPush(result.importsObj[importPackageListFirstToken].classes, node.text)
       end
 
+    -- collect gen-class :implements symbols
+    elseif
+      insideGenClass
+      and insideGenClassImplements
+      and idx > genClassNodeIdx
+      and isTokenNode2
+      and isTextNode
+      and genClassToggle == 1
+      and genClassKeyStr == "implements"
+    then
+      local symbolObj = {}
+      symbolObj.symbol = node.text
+      if insideReaderConditional and currentReaderConditionalPlatform then
+        symbolObj.platform = currentReaderConditionalPlatform
+      end
+      stackPush(result.genClass.implements, symbolObj)
+
     -- we are on the :gen-class node
     elseif insideGenClass and idx == genClassNodeIdx then
       result.genClass = {}
@@ -2946,7 +2983,7 @@ local function parseNs(nodesArr)
           -- FIXME: throw here? this is almost certainly an error in the source
         end
       end
-      -- FIXME: we need to handle :implements, :constructors, :methods, :exposes, :exposes-methods, here
+      -- FIXME: we need to handle :constructors, :methods, :exposes, :exposes-methods, here
 
       -- throw an error if we encounter :use
     elseif insideNsForm and isTokenNode2 and parenNestingDepth >= 1 and isUseNode(node) then
@@ -3084,7 +3121,9 @@ function formatRequireLine(req, initialIndentation)
     outTxt = strConcat3(outTxt, " :as ", req.as)
   elseif isString(req.asAlias) and req.asAlias ~= "" then
     outTxt = strConcat3(outTxt, " :as-alias ", req.asAlias)
-  elseif isString(req.default) and req.default ~= "" then
+  end
+
+  if isString(req.default) and req.default ~= "" then
     outTxt = strConcat3(outTxt, " :default ", req.default)
   end
 
@@ -3818,7 +3857,25 @@ local function formatNs(ns)
           outTxt = printCommentsAbove(outTxt, genClassValue.commentsAbove, indentationStr2)
           outTxt = strConcat(outTxt, indentationStr2)
           outTxt = strConcat3(outTxt, ":", genClassKey)
-          outTxt = strConcat3(outTxt, " ", genClassValue.value)
+
+          if genClassKey == "implements" then
+            local numInterfaces = arraySize(genClassValue)
+            local interfaceIdx = 0
+            while interfaceIdx < numInterfaces do
+              if interfaceIdx == 0 then
+                outTxt = strConcat3(outTxt, " [", genClassValue[interfaceIdx + 1].symbol) -- Lua arrays are 1-based
+              else
+                outTxt = strConcat3(outTxt, " ", genClassValue[interfaceIdx + 1].symbol) -- Lua arrays are 1-based
+              end
+              interfaceIdx = interfaceIdx + 1
+            end
+            if numInterfaces > 0 then
+              outTxt = strConcat(outTxt, "]")
+            end
+          else
+            outTxt = strConcat3(outTxt, " ", genClassValue.value)
+          end
+
           if isStringWithChars(genClassValue.commentAfter) then
             commentAfterGenClass = genClassValue.commentAfter
           end
