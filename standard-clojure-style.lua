@@ -7,7 +7,8 @@
 -- https://github.com/oakmac/standard-clojure-style-lua/blob/master/LICENSE.md
 
 -- forward declarations
-local appendChildren, formatRenamesList, getParser, inc, isNamespacedMapOpener, parse, removeCharsUpToNewline
+local appendChildren, formatRenamesList, inc, isNamespacedMapOpener, parse, removeCharsUpToNewline
+local parsers = {}
 
 -- exported module table
 local M = {}
@@ -455,8 +456,14 @@ end
 local function Named(opts)
   local n = {}
   n.parse = function(txt, pos)
-    local parser = getParser(opts.parser)
+    -- LAZY INIT: Resolve string to table on the first run
+    if type(opts.parser) == "string" then
+      opts.parser = parsers[opts.parser]
+    end
+
+    local parser = opts.parser
     local node = parser.parse(txt, pos)
+
     if not node then
       return nil
     elseif node and not isString(node.name) then
@@ -885,7 +892,12 @@ local function Choice(opts)
       local idx = 1
       local numParsers = arraySize(opts.parsers)
       while idx <= numParsers do
-        local parser = getParser(opts.parsers[idx])
+        -- LAZY INIT: Resolve string to table on the first run
+        if type(opts.parsers[idx]) == "string" then
+          opts.parsers[idx] = parsers[opts.parsers[idx]]
+        end
+
+        local parser = opts.parsers[idx]
         local possibleNode = parser.parse(txt, pos)
         if possibleNode then
           return possibleNode
@@ -901,7 +913,11 @@ end
 local function Repeat(opts)
   return {
     parse = function(txt, pos)
-      opts.parser = getParser(opts.parser)
+      -- LAZY INIT: Resolve string to table on the first run
+      if type(opts.parser) == "string" then
+        opts.parser = parsers[opts.parser]
+      end
+
       local minMatches = 0
       if isPositiveInt(opts.minMatches) then
         minMatches = opts.minMatches
@@ -967,32 +983,6 @@ function appendChildren(childrenArr, node)
     end
   end
 end
-
-local parsers = {}
-
-function getParser(p)
-  if isString(p) and parsers[p] then
-    return parsers[p]
-  end
-  if isTable(p) and isFunction(p.parse) then
-    return p
-  end
-  return nil
-end
-
-
-
--- after all parsers are defined, resolve string refs:
-for k, v in pairs(parsers) do
-  if v.parsers then
-    for i, p in ipairs(v.parsers) do
-      if type(p) == "string" then
-        v.parsers[i] = parsers[p]
-      end
-    end
-  end
-end
-
 
 -- -----------------------------------------------------------------------------
 -- Parser Definitions
@@ -3325,8 +3315,6 @@ function formatRequireLine_portable(req, initialIndentation)
   return outTxt
 end
 
-
-
 function formatRequireLine(req, initialIndentation)
   local parts = {}
 
@@ -3391,7 +3379,6 @@ function formatRequireLine(req, initialIndentation)
   -- Combine all parts into a single string efficiently
   return table.concat(parts)
 end
-
 
 -- returns an array of the available :refer-clojure keys
 -- valid options are: :exclude, :only, :rename
@@ -4684,7 +4671,7 @@ end
 
 function parse(inputTxt)
   set_appropriate_string_fns(inputTxt)
-  return getParser("source").parse(inputTxt, 1)
+  return parsers["source"].parse(inputTxt, 1)
 end
 
 -- -----------------------------------------------------------------------------
