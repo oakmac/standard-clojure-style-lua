@@ -27,9 +27,9 @@ local type = type
 -- -----------------------------------------------------------------------------
 -- Type Predicates
 
-local function isString(s)
-  return type(s) == "string"
-end
+-- local function isString(s)
+--   return type(s) == "string"
+-- end
 
 local function isInteger(x)
   return type(x) == "number" and x == math.floor(x)
@@ -427,7 +427,7 @@ local function strEndsWith(s, endStr)
 end
 
 local function isStringWithChars(s)
-  return isString(s) and s ~= ""
+  return type(s) == "string" and s ~= ""
 end
 
 local function strReplaceFirst(s, find, replace)
@@ -477,34 +477,31 @@ local function Node(opts)
 end
 
 local function Named(opts)
-  local n = {}
   local resolved = false
-  local parser = nil
-  local name = opts.name
+  local n = {}
 
   n.parse = function(txt, pos)
-    -- Resolve once
+    -- LAZY INIT: Resolve string to table ONCE per Named instance
     if not resolved then
       if type(opts.parser) == "string" then
-        parser = parsers[opts.parser]
-      else
-        parser = opts.parser
+        opts.parser = parsers[opts.parser]
       end
       resolved = true
     end
 
+    local parser = opts.parser
     local node = parser.parse(txt, pos)
 
     if not node then
       return nil
-    elseif node and type(node.name) ~= "string" then
-      node.name = name
+    elseif node and not type(node.name) == "string" then
+      node.name = opts.name
       return node
     else
       return Node({
         children = { node },
         endIdx = node.endIdx,
-        name = name,
+        name = opts.name,
         startIdx = node.startIdx,
       })
     end
@@ -581,7 +578,7 @@ local function NotChar(opts)
 end
 
 -- Terminal parser that matches a String
-local function String(opts)
+local function String_old(opts)
   return {
     name = opts.name,
     parse = function(txt, pos)
@@ -628,7 +625,7 @@ local function Pattern(opts)
 end
 
 -- Parses a body of a String character-by-character
-local function stringBodyParser(txt, pos)
+local function stringBodyParser_old(txt, pos)
   local charIdx = pos
   local endIdx = -1
 
@@ -658,6 +655,105 @@ local function stringBodyParser(txt, pos)
       name = ".body",
       startIdx = pos,
       text = substr(txt, pos, endIdx),
+    })
+  end
+
+  return nil
+end
+
+-- Parses a body of a String character-by-character
+local function stringBodyParser_old2(txt, pos)
+  local maxLength = strLen(txt)
+  if maxLength == 0 then
+    return nil
+  end
+
+  local charIdx = pos
+  local endIdx = -1
+
+  while charIdx <= maxLength do
+    local ch = charAt(txt, charIdx)
+    if not ch or ch == "" then
+      break
+    elseif ch == "\\" then
+      local nextChar = charAt(txt, charIdx + 1)
+      if type(nextChar) == "string" and nextChar ~= "" then
+        charIdx = charIdx + 1 -- skip the escaped char
+      else
+        return nil
+      end
+    elseif ch == '"' then
+      endIdx = charIdx
+      break
+    end
+    charIdx = charIdx + 1
+  end
+
+  if endIdx > 0 then
+    return Node({
+      endIdx = endIdx,
+      name = ".body",
+      startIdx = pos,
+      text = substr(txt, pos, endIdx),
+    })
+  end
+
+  return nil
+end
+
+-- Parses a body of a String jumping directly to escaped characters or quotes
+local function stringBodyParser(txt, pos)
+  local maxLengthChars = strLen(txt)
+  if maxLengthChars == 0 or pos > maxLengthChars then
+    return nil
+  end
+
+  local bytePos = utf8ByteOffset(txt, pos)
+  if not bytePos then
+    return nil
+  end
+
+  local startByte = bytePos
+  local charIdx = pos
+  local endCharIdx = -1
+
+  while bytePos <= #txt do
+    -- Fast C-level search for the next quote or backslash
+    local nextBoundary = string.find(txt, '["\\]', bytePos)
+
+    if not nextBoundary then
+      break
+    end
+
+    -- Count characters skipped to accurately maintain charIdx
+    local skippedSegment = txt:sub(bytePos, nextBoundary - 1)
+    local skippedChars = strLen(skippedSegment)
+
+    charIdx = charIdx + skippedChars
+    bytePos = nextBoundary
+
+    local ch = txt:sub(bytePos, bytePos)
+    if ch == "\\" then
+      -- skip the escaped character
+      local nextCharLen = utf8CharBytes(txt, bytePos + 1)
+      if bytePos + 1 <= #txt then
+        bytePos = bytePos + 1 + nextCharLen
+        charIdx = charIdx + 2 -- '\' is 1 char, escaped char is 1 char
+      else
+        return nil
+      end
+    elseif ch == '"' then
+      endCharIdx = charIdx
+      break
+    end
+  end
+
+  if endCharIdx > 0 then
+    return Node({
+      endIdx = endCharIdx,
+      name = ".body",
+      startIdx = pos,
+      text = txt:sub(startByte, bytePos - 1),
     })
   end
 
@@ -736,7 +832,7 @@ local function isValidTokenTailChar(ch)
 end
 
 -- parses a Token character-by-character
-local function tokenParser(txt, pos)
+local function tokenParser_old(txt, pos)
   local maxLength = strLen(txt)
   if maxLength == 0 or pos > maxLength then
     return nil
@@ -789,6 +885,136 @@ local function tokenParser(txt, pos)
   return nil
 end
 
+local invalidTokenTailPattern = '[%s,%(%)%[%]{}"@%^;`]'
+
+-- parses a Token natively via C-level byte matching, safely falling back to linear UTF-8 iteration
+local function tokenParser(txt, pos)
+  local maxLengthChars = strLen(txt)
+  if maxLengthChars == 0 or pos > maxLengthChars then
+    return nil
+  end
+
+  local bytePos = utf8ByteOffset(txt, pos)
+  if not bytePos then
+    return nil
+  end
+
+  local startByte = bytePos
+  local charIdx = pos
+
+  -- Fast-forwarding "##" check
+  if txt:sub(bytePos, bytePos + 1) == "##" then
+    bytePos = bytePos + 2
+    charIdx = charIdx + 2
+  end
+
+  -- Validate the Head Character
+  if bytePos > #txt then
+    return nil
+  end
+  local headLen = utf8CharBytes(txt, bytePos)
+  local headCh = txt:sub(bytePos, bytePos + headLen - 1)
+
+  if not isValidTokenHeadChar(headCh) then
+    return nil
+  end
+
+  bytePos = bytePos + headLen
+  charIdx = charIdx + 1
+
+  -- Now parse the tail characters
+  local keepSearching = true
+  while keepSearching and bytePos <= #txt do
+    -- Fast C-level search for the next ASCII invalid tail character
+    local nextInvalidBytePos = string.find(txt, invalidTokenTailPattern, bytePos)
+
+    -- If the very next char is invalid ASCII, we are done
+    if nextInvalidBytePos == bytePos then
+      break
+    end
+
+    local searchEndByte = nextInvalidBytePos and (nextInvalidBytePos - 1) or #txt
+    local skippedSegment = txt:sub(bytePos, searchEndByte)
+
+    if skippedSegment:find("[\128-\255]") then
+      -- Fallback: Check character-by-character for Unicode spaces
+      local fallbackKeepSearching = true
+      while fallbackKeepSearching and bytePos <= searchEndByte do
+        local len = utf8CharBytes(txt, bytePos)
+        local ch = txt:sub(bytePos, bytePos + len - 1)
+
+        if isValidTokenTailChar(ch) then
+          bytePos = bytePos + len
+          charIdx = charIdx + 1
+        else
+          fallbackKeepSearching = false
+          keepSearching = false -- break outer loop
+        end
+      end
+      -- If we hit the end of the segment without hitting an invalid char, we've reached nextInvalidBytePos
+      if fallbackKeepSearching then
+        keepSearching = false
+      end
+    else
+      -- Fast path: pure ASCII segment, all valid tails!
+      local segmentLen = searchEndByte - bytePos + 1
+      bytePos = searchEndByte + 1
+      charIdx = charIdx + segmentLen
+
+      keepSearching = false
+    end
+  end
+
+  if charIdx > pos then
+    return Node({
+      endIdx = charIdx,
+      name = "token",
+      startIdx = pos,
+      text = txt:sub(startByte, bytePos - 1),
+    })
+  end
+
+  return nil
+end
+
+-- local invalidTokenTailPattern = "[%s,%(%)%[%]{}\"@%^;`]"
+
+-- -- parses a Token character-by-character
+-- local function tokenParser(txt, pos)
+--   local maxLength = #txt
+--   if pos > maxLength then return nil end
+
+--   local charIdx = pos
+
+--   -- Fast-forwarding "##" check
+--   if string.sub(txt, pos, pos + 1) == "##" then
+--     charIdx = pos + 2
+--   else
+--     -- Check head using original function to safely support unicode
+--     local headCh = charAt(txt, pos)
+--     if not headCh or headCh == "" or not isValidTokenHeadChar(headCh) then
+--       return nil
+--     end
+--     charIdx = pos + #headCh
+--   end
+
+--   -- Fast C-level search for the next invalid tail character
+--   local nextInvalidPos = string.find(txt, invalidTokenTailPattern, charIdx)
+
+--   local endIdx = nextInvalidPos and (nextInvalidPos - 1) or maxLength
+
+--   if endIdx >= pos then
+--     return Node({
+--       endIdx = endIdx + 1,
+--       name = "token",
+--       startIdx = pos,
+--       text = string.sub(txt, pos, endIdx),
+--     })
+--   end
+
+--   return nil
+-- end
+
 local specialCharsTbl = {
   ["("] = true,
   [")"] = true,
@@ -828,11 +1054,41 @@ local function specialCharParser(txt, pos)
 end
 
 -- parses whitespace character-by-character
-local function whitespaceParser(txt, pos)
+local function whitespaceParser_working_old(txt, pos)
   local charIdx = pos
   local endIdx = -1
 
   while true do
+    local ch = charAt(txt, charIdx)
+    if not ch or ch == "" or not whitespaceCharsTbl[ch] then
+      break
+    end
+    endIdx = charIdx
+    charIdx = charIdx + 1
+  end
+
+  if endIdx > 0 then
+    return Node({
+      endIdx = endIdx + 1,
+      name = "whitespace",
+      startIdx = pos,
+      text = substr(txt, pos, endIdx + 1),
+    })
+  end
+
+  return nil
+end
+
+local function whitespaceParser(txt, pos)
+  local maxLength = strLen(txt)
+  if maxLength == 0 then
+    return nil
+  end
+
+  local charIdx = pos
+  local endIdx = -1
+
+  while charIdx <= maxLength do
     local ch = charAt(txt, charIdx)
     if not ch or ch == "" or not whitespaceCharsTbl[ch] then
       break
@@ -895,23 +1151,28 @@ local function Choice(opts)
 
   return {
     parse = function(txt, pos)
-      local numParsers = #opts.parsers
+      local numParsers = arraySize(opts.parsers)
 
-      -- Resolve string references to tables ONLY ONCE
+      -- LAZY INIT: Resolve string to table ONCE per Choice instance
       if not resolved then
-        for i = 1, numParsers do
+        local i = 1
+        while i <= numParsers do
           if type(opts.parsers[i]) == "string" then
             opts.parsers[i] = parsers[opts.parsers[i]]
           end
+          i = i + 1
         end
         resolved = true
       end
 
-      for i = 1, numParsers do
-        local possibleNode = opts.parsers[i].parse(txt, pos)
+      local idx = 1
+      while idx <= numParsers do
+        local parser = opts.parsers[idx]
+        local possibleNode = parser.parse(txt, pos)
         if possibleNode then
           return possibleNode
         end
+        idx = idx + 1
       end
       return nil
     end,
@@ -944,7 +1205,7 @@ local function Repeat(opts)
         end
       end
       local name2 = nil
-      if isString(opts.name) and endIdx > pos then
+      if type(opts.name) == "string" and endIdx > pos then
         name2 = opts.name
       end
       if arraySize(children) >= minMatches then
@@ -965,7 +1226,7 @@ local function Optional(parser)
   return {
     parse = function(txt, pos)
       local node = parser.parse(txt, pos)
-      if node and isString(node.text) and node.text ~= "" then
+      if node and type(node.text) == "string" and node.text ~= "" then
         return node
       else
         return Node({ startIdx = pos, endIdx = pos })
@@ -978,7 +1239,7 @@ end
 -- Parser Helpers
 
 function appendChildren(childrenArr, node)
-  if isString(node.name) and node.name ~= "" then
+  if type(node.name) == "string" and node.name ~= "" then
     table.insert(childrenArr, node)
   elseif isArray(node.children) then
     local idx = 1
@@ -1014,7 +1275,7 @@ parsers.token = Choice({
 })
 
 -- dev toggle
-local usePatternWhitespaceParser = false
+local usePatternWhitespaceParser = true
 
 if usePatternWhitespaceParser then
   local whitespaceChars = ""
@@ -1151,7 +1412,7 @@ parsers.source = Repeat({
 -- Format Helpers
 
 local function nodeContainsText(node)
-  return node and isString(node.text) and node.text ~= ""
+  return node and type(node.text) == "string" and node.text ~= ""
 end
 
 local function isNodeWithNonBlankText(node)
@@ -1163,75 +1424,75 @@ local function isNsNode(node)
 end
 
 local function isUseNode(node)
-  return node and isString(node.text) and (node.text == ":use" or node.text == "use")
+  return node and type(node.text) == "string" and (node.text == ":use" or node.text == "use")
 end
 
 local function isRequireNode(node)
-  return node and isString(node.text) and (node.text == ":require" or node.text == "require")
+  return node and type(node.text) == "string" and (node.text == ":require" or node.text == "require")
 end
 
 local function isRequireMacrosKeyword(node)
-  return node and isString(node.text) and node.text == ":require-macros"
+  return node and type(node.text) == "string" and node.text == ":require-macros"
 end
 
 local function isReferClojureNode(node)
-  return node and isString(node.text) and (node.text == ":refer-clojure" or node.text == "refer-clojure")
+  return node and type(node.text) == "string" and (node.text == ":refer-clojure" or node.text == "refer-clojure")
 end
 
 local function isExcludeKeyword(node)
-  return node and isString(node.text) and node.text == ":exclude"
+  return node and type(node.text) == "string" and node.text == ":exclude"
 end
 
 local function isOnlyKeyword(node)
-  return node and isString(node.text) and node.text == ":only"
+  return node and type(node.text) == "string" and node.text == ":only"
 end
 
 local function isRenameKeyword(node)
-  return node and isString(node.text) and node.text == ":rename"
+  return node and type(node.text) == "string" and node.text == ":rename"
 end
 
 local function isAsKeyword(node)
-  return node and isString(node.text) and node.text == ":as"
+  return node and type(node.text) == "string" and node.text == ":as"
 end
 
 local function isAsAliasKeyword(node)
-  return node and isString(node.text) and node.text == ":as-alias"
+  return node and type(node.text) == "string" and node.text == ":as-alias"
 end
 
 local function isReferKeyword(node)
-  return node and isString(node.text) and node.text == ":refer"
+  return node and type(node.text) == "string" and node.text == ":refer"
 end
 
 local function isDefaultKeyword(node)
-  return node and isString(node.text) and node.text == ":default"
+  return node and type(node.text) == "string" and node.text == ":default"
 end
 
 local function isReferMacrosKeyword(node)
-  return node and isString(node.text) and node.text == ":refer-macros"
+  return node and type(node.text) == "string" and node.text == ":refer-macros"
 end
 
 local function isIncludeMacrosNode(node)
-  return node and isString(node.text) and node.text == ":include-macros"
+  return node and type(node.text) == "string" and node.text == ":include-macros"
 end
 
 local function isBooleanNode(node)
-  return node and isString(node.text) and (node.text == "true" or node.text == "false")
+  return node and type(node.text) == "string" and (node.text == "true" or node.text == "false")
 end
 
 local function isAllNode(node)
-  return node and isString(node.text) and node.text == ":all"
+  return node and type(node.text) == "string" and node.text == ":all"
 end
 
 local function isKeywordNode(node)
-  return node and isString(node.text) and strStartsWith(node.text, ":")
+  return node and type(node.text) == "string" and strStartsWith(node.text, ":")
 end
 
 local function isImportNode(node)
-  return node and isString(node.text) and (node.text == ":import" or node.text == "import")
+  return node and type(node.text) == "string" and (node.text == ":import" or node.text == "import")
 end
 
 local function isNewlineNode(n)
-  return n.name == "whitespace" and isString(n.text) and strIncludes(n.text, "\n")
+  return n.name == "whitespace" and strIncludes(n.text, "\n")
 end
 
 local function isWhitespaceNode(n)
@@ -1355,7 +1616,7 @@ local function commentNeedsSpaceInside(commentTxt)
 end
 
 local function isGenClassNode(node)
-  return node and isString(node.text) and node.text == ":gen-class"
+  return node and type(node.text) == "string" and node.text == ":gen-class"
 end
 
 local genClassKeywordsTbl = {
@@ -1377,7 +1638,7 @@ local genClassKeywordsTbl = {
 }
 
 local function isGenClassKeyword(node)
-  return node and isString(node.text) and genClassKeywordsTbl[node.text]
+  return node and type(node.text) == "string" and genClassKeywordsTbl[node.text]
 end
 
 local genClassKeys = {
@@ -1473,7 +1734,7 @@ local function findNextNodeWithText(allNodes, idx)
   local maxIdx = arraySize(allNodes)
   while idx <= maxIdx do
     local node = allNodes[idx]
-    if isString(node.text) and node.text ~= "" then
+    if type(node.text) == "string" and node.text ~= "" then
       return node
     end
     idx = idx + 1
@@ -1574,7 +1835,7 @@ function areForwardNodesAlreadySlurped(nodes, idx)
       keepSearching = false
     elseif isNewlineNode(node) then
       keepSearching = false
-    elseif not isString(node.text) then
+    elseif not type(node.text) == "string" then
       keepSearching = true
     elseif node._wasSlurpedUp or isWhitespaceNode(node) then
       keepSearching = true
@@ -1658,7 +1919,7 @@ function recordOriginalColIndexes(nodes, idx)
       keepSearching = false
     else
       local nodeTxt = node.text
-      if isString(nodeTxt) and nodeTxt ~= "" then
+      if type(nodeTxt) == "string" and nodeTxt ~= "" then
         local nodeTxtLength = strLen(nodeTxt)
         node._origColIdx = colIdx
         colIdx = colIdx + nodeTxtLength
@@ -3238,7 +3499,7 @@ local function onlyOneRequirePerPlatform(reqs)
   local keepSearching = true
   local result = true
   while keepSearching do
-    if reqs[idx + 1] and reqs[idx + 1].platform and isString(reqs[idx + 1].platform) then
+    if reqs[idx + 1] and reqs[idx + 1].platform and type(reqs[idx + 1].platform) == "string" then
       local platform = reqs[idx + 1].platform
       if platform ~= "" then
         if platformCounts[platform] then
@@ -3266,7 +3527,7 @@ function filterOnPlatform(arr, platform)
     local itm = arr[idx + 1]
     if platform == false and not itm.platform then
       stackPush(filteredReqs, itm)
-    elseif isString(itm.platform) and itm.platform == platform then
+    elseif itm.platform == platform then
       stackPush(filteredReqs, arr[idx + 1])
     end
     idx = idx + 1
@@ -3284,15 +3545,15 @@ function formatRequireLine(req, initialIndentation)
   table.insert(parts, "[")
   table.insert(parts, req.symbol)
 
-  if isString(req.as) and req.as ~= "" then
+  if type(req.as) == "string" and req.as ~= "" then
     table.insert(parts, " :as ")
     table.insert(parts, req.as)
-  elseif isString(req.asAlias) and req.asAlias ~= "" then
+  elseif type(req.asAlias) == "string" and req.asAlias ~= "" then
     table.insert(parts, " :as-alias ")
     table.insert(parts, req.asAlias)
   end
 
-  if isString(req.default) and req.default ~= "" then
+  if type(req.default) == "string" and req.default ~= "" then
     table.insert(parts, " :default ")
     table.insert(parts, req.default)
   end
@@ -3634,7 +3895,7 @@ local function formatNs(ns)
     and not hasGenClass
   local trailingParensArePrinted = false
 
-  if isString(ns.docstring) then
+  if type(ns.docstring) == "string" then
     txtChunks[#txtChunks + 1] = '\n  "'
     txtChunks[#txtChunks + 1] = ns.docstring
     txtChunks[#txtChunks + 1] = '"'
@@ -3755,7 +4016,7 @@ local function formatNs(ns)
       end
 
       txtChunks[#txtChunks + 1] = "\n     (:require"
-      if isString(ns.requireCommentAfter) and ns.requireCommentAfter ~= "" then
+      if type(ns.requireCommentAfter) == "string" and ns.requireCommentAfter ~= "" then
         txtChunks[#txtChunks + 1] = " "
         txtChunks[#txtChunks + 1] = ns.requireCommentAfter
       end
@@ -4181,7 +4442,7 @@ local function formatNodes(nodesArr, parsedNs)
     end
 
     if insideTheIgnoreZone then
-      if isString(node.text) and node.text ~= "" then
+      if type(node.text) == "string" and node.text ~= "" then
         txtChunks[#txtChunks + 1] = node.text
       end
 
