@@ -14,6 +14,9 @@ local parsers = {}
 local M = {}
 M.version = "0.26.0"
 
+-- this is a micro-optimization so Lua does not have to look up "type" on the global table
+local type = type
+
 -- -----------------------------------------------------------------------------
 -- Development Helpers
 
@@ -124,13 +127,13 @@ local function arrayReverse(arr)
   return newArr
 end
 
-local function strConcat(s1, s2)
-  return tostring(s1) .. tostring(s2)
-end
+-- local function strConcat(s1, s2)
+--   return tostring(s1) .. tostring(s2)
+-- end
 
-local function strConcat3(s1, s2, s3)
-  return tostring(s1) .. tostring(s2) .. tostring(s3)
-end
+-- local function strConcat3(s1, s2, s3)
+--   return tostring(s1) .. tostring(s2) .. tostring(s3)
+-- end
 
 -- function inc(n)
 --   return n + 1
@@ -344,9 +347,29 @@ local strLen = strLenUTF8
 local charAt = charAtUTF8
 local substr = substrUTF8
 
--- FIXME: rename this
--- add comment explaining what this is and why it exists
+-- local cached_txt = nil
+-- local cached_len = 0
+
+-- local function memoizedStrLen(s)
+--   if s == cached_txt then
+--     return cached_len
+--   end
+--   cached_txt = s
+
+--   if str_contains_multibyte_chars(s) then
+--     cached_len = strLenUTF8(s)
+--   else
+--     cached_len = strLenASCII(s)
+--   end
+
+--   return cached_len
+-- end
+
 local function set_appropriate_string_fns(txt)
+  -- Reset the cache for safety on new parse runs
+  -- cached_txt = nil
+  -- strLen = memoizedStrLen
+
   if str_contains_multibyte_chars(txt) then
     strLen = strLenUTF8
     charAt = charAtUTF8
@@ -455,25 +478,33 @@ end
 
 local function Named(opts)
   local n = {}
+  local resolved = false
+  local parser = nil
+  local name = opts.name
+
   n.parse = function(txt, pos)
-    -- LAZY INIT: Resolve string to table on the first run
-    if type(opts.parser) == "string" then
-      opts.parser = parsers[opts.parser]
+    -- Resolve once
+    if not resolved then
+      if type(opts.parser) == "string" then
+        parser = parsers[opts.parser]
+      else
+        parser = opts.parser
+      end
+      resolved = true
     end
 
-    local parser = opts.parser
     local node = parser.parse(txt, pos)
 
     if not node then
       return nil
-    elseif node and not isString(node.name) then
-      node.name = opts.name
+    elseif node and type(node.name) ~= "string" then
+      node.name = name
       return node
     else
       return Node({
         children = { node },
         endIdx = node.endIdx,
-        name = opts.name,
+        name = name,
         startIdx = node.startIdx,
       })
     end
@@ -572,18 +603,20 @@ local function String(opts)
 end
 
 local function Pattern(opts)
+  local fullPattern = "^" .. opts.pattern
+  local name = opts.name
+
   return {
-    name = opts.name,
+    name = name,
     pattern = opts.pattern,
     parse = function(txt, pos)
       local txt2 = substr(txt, pos, -1)
-      local pattern2 = strConcat("^", opts.pattern)
-      local matchResult = txt2:match(pattern2)
+      local matchResult = string.match(txt2, fullPattern)
 
-      if isString(matchResult) then
+      if type(matchResult) == "string" then
         return Node({
           endIdx = pos + strLen(matchResult),
-          name = opts.name,
+          name = name,
           startIdx = pos,
           text = matchResult,
         })
@@ -596,39 +629,27 @@ end
 
 -- Parses a body of a String character-by-character
 local function stringBodyParser(txt, pos)
-  local maxLength = strLen(txt)
-  if maxLength == 0 then
-    return nil
-  end
-
   local charIdx = pos
   local endIdx = -1
-  local keepSearching = true
-  local parsedTxt = ""
 
-  while keepSearching do
+  while true do
     local ch = charAt(txt, charIdx)
-    if ch == nil or ch == "" then
-      keepSearching = false
+
+    if not ch or ch == "" then
+      break
     elseif ch == "\\" then
       local nextChar = charAt(txt, charIdx + 1)
-      if isString(nextChar) and nextChar ~= "" then
-        parsedTxt = strConcat3(parsedTxt, ch, nextChar)
-        charIdx = charIdx + 1
+      if type(nextChar) == "string" and nextChar ~= "" then
+        charIdx = charIdx + 1 -- skip the escaped char
       else
         return nil
       end
     elseif ch == '"' then
-      keepSearching = false
       endIdx = charIdx
-    else
-      parsedTxt = strConcat(parsedTxt, ch)
+      break
     end
 
     charIdx = charIdx + 1
-    if charIdx > maxLength then
-      keepSearching = false
-    end
   end
 
   if endIdx > 0 then
@@ -636,7 +657,7 @@ local function stringBodyParser(txt, pos)
       endIdx = endIdx,
       name = ".body",
       startIdx = pos,
-      text = parsedTxt,
+      text = substr(txt, pos, endIdx),
     })
   end
 
@@ -717,44 +738,42 @@ end
 -- parses a Token character-by-character
 local function tokenParser(txt, pos)
   local maxLength = strLen(txt)
-  if maxLength == 0 then
+  if maxLength == 0 or pos > maxLength then
     return nil
   end
 
   local charIdx = pos
   local endIdx = -1
   local keepSearching = true
-  local parsedTxt = ""
   local firstChar = true
 
+  -- Fast-forwarding "##" check
   local firstTwoChars = substr(txt, pos, pos + 2)
   if firstTwoChars == "##" then
-    parsedTxt = "##"
     charIdx = charIdx + 2
   end
 
-  while keepSearching do
+  while keepSearching and charIdx <= maxLength do
     local ch = charAt(txt, charIdx)
-    if ch == nil or ch == "" then
-      keepSearching = false
-    elseif firstChar then
+    if not ch or ch == "" then
+      break
+    end
+
+    if firstChar then
       if isValidTokenHeadChar(ch) then
-        parsedTxt = strConcat(parsedTxt, ch)
         endIdx = charIdx
         firstChar = false
       else
         return nil
       end
     elseif isValidTokenTailChar(ch) then
-      parsedTxt = strConcat(parsedTxt, ch)
       endIdx = charIdx
     else
       keepSearching = false
     end
 
-    charIdx = charIdx + 1
-    if charIdx > maxLength then
-      keepSearching = false
+    if keepSearching then
+      charIdx = charIdx + 1
     end
   end
 
@@ -763,7 +782,7 @@ local function tokenParser(txt, pos)
       endIdx = endIdx + 1,
       name = "token",
       startIdx = pos,
-      text = parsedTxt,
+      text = substr(txt, pos, endIdx + 1),
     })
   end
 
@@ -800,7 +819,7 @@ local function specialCharParser(txt, pos)
         endIdx = pos + 2,
         name = "token",
         startIdx = pos,
-        text = strConcat(firstChar, secondChar),
+        text = firstChar .. secondChar,
       })
     end
   end
@@ -810,31 +829,16 @@ end
 
 -- parses whitespace character-by-character
 local function whitespaceParser(txt, pos)
-  local maxLength = strLen(txt)
-  if maxLength == 0 then
-    return nil
-  end
-
   local charIdx = pos
   local endIdx = -1
-  local keepSearching = true
-  local parsedTxt = ""
 
-  while keepSearching do
+  while true do
     local ch = charAt(txt, charIdx)
-    if ch == nil or ch == "" then
-      keepSearching = false
-    elseif whitespaceCharsTbl[ch] then
-      parsedTxt = strConcat(parsedTxt, ch)
-      endIdx = charIdx
-    else
-      keepSearching = false
+    if not ch or ch == "" or not whitespaceCharsTbl[ch] then
+      break
     end
-
+    endIdx = charIdx
     charIdx = charIdx + 1
-    if charIdx > maxLength then
-      keepSearching = false
-    end
   end
 
   if endIdx > 0 then
@@ -842,7 +846,7 @@ local function whitespaceParser(txt, pos)
       endIdx = endIdx + 1,
       name = "whitespace",
       startIdx = pos,
-      text = parsedTxt,
+      text = substr(txt, pos, endIdx + 1),
     })
   end
 
@@ -887,22 +891,27 @@ end
 
 -- matches the first matching of several parsers
 local function Choice(opts)
+  local resolved = false
+
   return {
     parse = function(txt, pos)
-      local idx = 1
-      local numParsers = arraySize(opts.parsers)
-      while idx <= numParsers do
-        -- LAZY INIT: Resolve string to table on the first run
-        if type(opts.parsers[idx]) == "string" then
-          opts.parsers[idx] = parsers[opts.parsers[idx]]
-        end
+      local numParsers = #opts.parsers
 
-        local parser = opts.parsers[idx]
-        local possibleNode = parser.parse(txt, pos)
+      -- Resolve string references to tables ONLY ONCE
+      if not resolved then
+        for i = 1, numParsers do
+          if type(opts.parsers[i]) == "string" then
+            opts.parsers[i] = parsers[opts.parsers[i]]
+          end
+        end
+        resolved = true
+      end
+
+      for i = 1, numParsers do
+        local possibleNode = opts.parsers[i].parse(txt, pos)
         if possibleNode then
           return possibleNode
         end
-        idx = idx + 1
       end
       return nil
     end,
@@ -1428,10 +1437,10 @@ local function getTextFromRootNode(rootNode)
   recurseAllChildren(rootNode, function(n)
     -- edge case: add '#' text to .tag nodes
     if isTagNode(n) then
-      s = strConcat(s, "#")
+      s = s .. "#"
     end
     if isStringWithChars(n.text) then
-      s = strConcat(s, n.text)
+      s = s .. n.text
     end
   end)
   return s
@@ -2869,7 +2878,7 @@ local function parseNs(nodesArr)
         result.requires = {}
       end
 
-      local namespace = strConcat3(prefixListPrefix, ".", node.text)
+      local namespace = prefixListPrefix .. "." .. node.text
 
       local requireObj = {
         prefixListId = currentPrefixListId,
@@ -2981,7 +2990,7 @@ local function parseNs(nodesArr)
         result.requires[activeRequireIdx].platform = currentReaderConditionalPlatform
       end
 
-      result.requires[activeRequireIdx].symbol = strConcat3('"', getTextFromStringNode(node), '"')
+      result.requires[activeRequireIdx].symbol = '"' .. getTextFromStringNode(node) .. '"'
       result.requires[activeRequireIdx].symbolIsString = true
 
     -- collect :import packages not inside of a list or vector
@@ -3111,7 +3120,7 @@ local function parseNs(nodesArr)
       and genClassKeyStr == "prefix"
       and isStringNode(node)
     then
-      result.genClass.prefix.value = strConcat3('"', getTextFromStringNode(node), '"')
+      result.genClass.prefix.value = '"' .. getTextFromStringNode(node) .. '"'
       genClassToggle = 0
       genClassValueLineNo = lineNo
 
@@ -3175,16 +3184,16 @@ end
 -- adds the lines from a commentsAbove array to outTxt if possible
 -- returns outTxt (String)
 local function printCommentsAbove(outTxt, commentsAbove, indentationStr)
+  local txtChunks = { outTxt }
   if isArray(commentsAbove) then
     local numCommentLines = arraySize(commentsAbove)
     local idx = 1
     while idx <= numCommentLines do
-      local commentLine = strConcat(indentationStr, commentsAbove[idx])
-      outTxt = strConcat3(outTxt, commentLine, "\n")
+      txtChunks[#txtChunks + 1] = indentationStr .. commentsAbove[idx] .. "\n"
       idx = idx + 1
     end
   end
-  return outTxt
+  return table.concat(txtChunks)
 end
 
 -- returns a sorted array of platform strings found on items in arr
@@ -3263,56 +3272,6 @@ function filterOnPlatform(arr, platform)
     idx = idx + 1
   end
   return filteredReqs
-end
-
-function formatRequireLine_portable(req, initialIndentation)
-  local outTxt = ""
-  outTxt = printCommentsAbove(outTxt, req.commentsAbove, initialIndentation)
-  outTxt = strConcat(outTxt, initialIndentation)
-  outTxt = strConcat3(outTxt, "[", req.symbol)
-  if isString(req.as) and req.as ~= "" then
-    outTxt = strConcat3(outTxt, " :as ", req.as)
-  elseif isString(req.asAlias) and req.asAlias ~= "" then
-    outTxt = strConcat3(outTxt, " :as-alias ", req.asAlias)
-  end
-
-  if isString(req.default) and req.default ~= "" then
-    outTxt = strConcat3(outTxt, " :default ", req.default)
-  end
-
-  -- NOTE: this will not work if the individual :refer symbols are wrapped in a reader conditional
-  if isArray(req.refer) and arraySize(req.refer) > 0 then
-    outTxt = strConcat(outTxt, " :refer [")
-    local referSymbols = arrayPluck(req.refer, "symbol")
-    outTxt = strConcat(outTxt, strJoin(referSymbols, " "))
-    outTxt = strConcat(outTxt, "]")
-  elseif req.refer == "all" then
-    outTxt = strConcat(outTxt, " :refer :all")
-  end
-  -- NOTE: this will not work if the individual :exclude symbols are wrapped in a reader conditional
-  if isArray(req.exclude) and arraySize(req.exclude) > 0 then
-    outTxt = strConcat(outTxt, " :exclude [")
-    local excludeSymbols = arrayPluck(req.exclude, "symbol")
-    outTxt = strConcat(outTxt, strJoin(excludeSymbols, " "))
-    outTxt = strConcat(outTxt, "]")
-  end
-  if req.includeMacros == true then
-    outTxt = strConcat(outTxt, " :include-macros true")
-  elseif req.includeMacros == false then
-    outTxt = strConcat(outTxt, " :include-macros false")
-  end
-  if isArray(req.referMacros) and arraySize(req.referMacros) > 0 then
-    outTxt = strConcat(outTxt, " :refer-macros [")
-    outTxt = strConcat(outTxt, strJoin(req.referMacros, " "))
-    outTxt = strConcat(outTxt, "]")
-  end
-  if isArray(req.rename) and arraySize(req.rename) > 0 then
-    outTxt = strConcat(outTxt, " :rename {")
-    outTxt = strConcat(outTxt, formatRenamesList(req.rename))
-    outTxt = strConcat(outTxt, "}")
-  end
-  outTxt = strConcat(outTxt, "]")
-  return outTxt
 end
 
 function formatRequireLine(req, initialIndentation)
@@ -3399,115 +3358,154 @@ local function getReferClojureKeys(referClojure)
 end
 
 local function formatKeywordFollowedByListOfSymbols(kwd, symbols)
-  local s = strConcat(kwd, " [")
-  s = strConcat(s, strJoin(symbols, " "))
-  s = strConcat(s, "]")
-  return s
+  local parts = {}
+  table.insert(parts, kwd)
+  table.insert(parts, " [")
+  table.insert(parts, strJoin(symbols, " "))
+  table.insert(parts, "]")
+
+  return table.concat(parts)
 end
 
 function formatRenamesList(itms)
-  local s = ""
+  local parts = {}
   local numItms = arraySize(itms)
   local idx = 0
+
   while idx < numItms do
-    s = strConcat(s, itms[idx + 1].fromSymbol)
-    s = strConcat(s, " ")
-    s = strConcat(s, itms[idx + 1].toSymbol)
+    table.insert(parts, itms[idx + 1].fromSymbol)
+    table.insert(parts, " ")
+    table.insert(parts, itms[idx + 1].toSymbol)
+
     if idx + 1 < numItms then
-      s = strConcat(s, ", ")
+      table.insert(parts, ", ")
     end
+
     idx = idx + 1
   end
-  return s
+
+  return table.concat(parts)
 end
 
 local function formatReferClojureSingleKeyword(ns, excludeOrOnly)
   local symbolsArr = ns.referClojure[excludeOrOnly]
-  local kwd = strConcat(":", excludeOrOnly)
+  local kwd = ":" .. excludeOrOnly -- standard Lua concat is faster here
   local platforms = getPlatformsFromArray(symbolsArr)
   local numPlatforms = arraySize(platforms)
   local symbolsForAllPlatforms = arrayPluck(filterOnPlatform(symbolsArr, false), "symbol")
   local numSymbolsForAllPlatforms = arraySize(symbolsForAllPlatforms)
+
+  local parts = {}
+
   -- there are no reader conditionals: print all of the symbols
   if numPlatforms == 0 then
-    local s = "\n"
-    s = printCommentsAbove(s, ns.referClojureCommentsAbove, "  ")
-    s = strConcat(s, "  (:refer-clojure ")
-    s = strConcat(s, formatKeywordFollowedByListOfSymbols(kwd, symbolsForAllPlatforms))
-    s = strConcat(s, ")")
-    return s
-    -- all symbols are for a single platform: wrap the entire (:refer-clojure) in a single reader conditional
+    table.insert(parts, "\n")
+    table.insert(parts, printCommentsAbove("", ns.referClojureCommentsAbove, "  "))
+    table.insert(parts, "  (:refer-clojure ")
+    table.insert(parts, formatKeywordFollowedByListOfSymbols(kwd, symbolsForAllPlatforms))
+    table.insert(parts, ")")
+
+    return table.concat(parts)
+
+  -- all symbols are for a single platform: wrap the entire (:refer-clojure) in a single reader conditional
   elseif numPlatforms == 1 and numSymbolsForAllPlatforms == 0 then
     local symbols2 = arrayPluck(symbolsArr, "symbol")
-    local s = strConcat3("\n  #?(", platforms[1], "\n")
-    s = printCommentsAbove(s, ns.referClojureCommentsAbove, "     ")
-    s = strConcat(s, "     (:refer-clojure ")
-    s = strConcat(s, formatKeywordFollowedByListOfSymbols(kwd, symbols2))
-    s = strConcat(s, "))")
-    return s
-    -- all symbols are for specific platforms, ie: every symbol is wrapped in a reader conditional
+
+    table.insert(parts, "\n  #?(")
+    table.insert(parts, platforms[1])
+    table.insert(parts, "\n")
+    table.insert(parts, printCommentsAbove("", ns.referClojureCommentsAbove, "     "))
+    table.insert(parts, "     (:refer-clojure ")
+    table.insert(parts, formatKeywordFollowedByListOfSymbols(kwd, symbols2))
+    table.insert(parts, "))")
+
+    return table.concat(parts)
+
+  -- all symbols are for specific platforms, ie: every symbol is wrapped in a reader conditional
   elseif numPlatforms > 1 and numSymbolsForAllPlatforms == 0 then
-    local s = "\n"
-    s = printCommentsAbove(s, ns.referClojureCommentsAbove, "  ")
-    s = strConcat(s, "  (:refer-clojure\n")
-    s = strConcat3(s, "    ", kwd)
-    s = strConcat(s, " #?@(")
+    table.insert(parts, "\n")
+    table.insert(parts, printCommentsAbove("", ns.referClojureCommentsAbove, "  "))
+    table.insert(parts, "  (:refer-clojure\n")
+    table.insert(parts, "    ")
+    table.insert(parts, kwd)
+    table.insert(parts, " #?@(")
+
     local platformIdx = 0
     while platformIdx < numPlatforms do
       local platform = platforms[platformIdx + 1]
       local symbolsForPlatform = arrayPluck(filterOnPlatform(symbolsArr, platform), "symbol")
-      s = strConcat(s, formatKeywordFollowedByListOfSymbols(platform, symbolsForPlatform))
+
+      table.insert(parts, formatKeywordFollowedByListOfSymbols(platform, symbolsForPlatform))
+
       if platformIdx + 1 ~= numPlatforms then
         if kwd == ":exclude" then
-          s = strConcat3(s, "\n", repeatString(" ", 17))
+          table.insert(parts, "\n")
+          table.insert(parts, repeatString(" ", 17))
         elseif kwd == ":only" then
-          s = strConcat3(s, "\n", repeatString(" ", 14))
+          table.insert(parts, "\n")
+          table.insert(parts, repeatString(" ", 14))
         else
           -- FIXME: throw error here?
         end
       end
       platformIdx = platformIdx + 1
     end
-    s = strConcat(s, "))")
-    return s
-    -- we have a mix of symbols for all platforms and some for specific platforms
+
+    table.insert(parts, "))")
+
+    return table.concat(parts)
+
+  -- we have a mix of symbols for all platforms and some for specific platforms
   else
-    local s = "\n"
-    s = printCommentsAbove(s, ns.referClojureCommentsAbove, "  ")
-    s = strConcat(s, "  (:refer-clojure\n")
-    s = strConcat3(s, "    ", kwd)
-    s = strConcat(s, " [")
-    s = strConcat(s, strJoin(symbolsForAllPlatforms, " "))
+    table.insert(parts, "\n")
+    table.insert(parts, printCommentsAbove("", ns.referClojureCommentsAbove, "  "))
+    table.insert(parts, "  (:refer-clojure\n")
+    table.insert(parts, "    ")
+    table.insert(parts, kwd)
+    table.insert(parts, " [")
+    table.insert(parts, strJoin(symbolsForAllPlatforms, " "))
+
     if kwd == ":exclude" then
-      s = strConcat3(s, "\n", repeatString(" ", 14))
+      table.insert(parts, "\n")
+      table.insert(parts, repeatString(" ", 14))
     elseif kwd == ":only" then
-      s = strConcat3(s, "\n", repeatString(" ", 11))
+      table.insert(parts, "\n")
+      table.insert(parts, repeatString(" ", 11))
     else
       -- FIXME: throw error here?
     end
-    s = strConcat(s, "#?@(")
+
+    table.insert(parts, "#?@(")
+
     local platformIdx = 0
     while platformIdx < numPlatforms do
       local platform = platforms[platformIdx + 1]
       local symbolsForPlatform = arrayPluck(filterOnPlatform(symbolsArr, platform), "symbol")
-      s = strConcat(s, formatKeywordFollowedByListOfSymbols(platform, symbolsForPlatform))
+
+      table.insert(parts, formatKeywordFollowedByListOfSymbols(platform, symbolsForPlatform))
+
       if platformIdx + 1 ~= numPlatforms then
         if kwd == ":exclude" then
-          s = strConcat3(s, "\n", repeatString(" ", 18))
+          table.insert(parts, "\n")
+          table.insert(parts, repeatString(" ", 18))
         elseif kwd == ":only" then
-          s = strConcat3(s, "\n", repeatString(" ", 15))
+          table.insert(parts, "\n")
+          table.insert(parts, repeatString(" ", 15))
         end
       end
       platformIdx = platformIdx + 1
     end
-    s = strConcat(s, ")])")
-    return s
+
+    table.insert(parts, ")])")
+
+    return table.concat(parts)
   end
 end
 
 local function formatReferClojure(ns)
   local keys = getReferClojureKeys(ns.referClojure)
   local numKeys = arraySize(keys)
+
   -- there are no :refer-clojure items, we are done
   if numKeys == 0 then
     return ""
@@ -3529,23 +3527,28 @@ local function formatReferClojure(ns)
     local allRenamesForSamePlatform = numNonPlatformSpecificRenames == 0 and arraySize(platforms) > 0
 
     if numPlatforms == 0 then
-      local s = "\n"
-      s = printCommentsAbove(s, ns.referClojureCommentsAbove, "  ")
-      s = strConcat(s, "  (:refer-clojure :rename {")
-      s = strConcat(s, formatRenamesList(ns.referClojure.rename))
-      s = strConcat(s, "})")
-      return s
+      local parts = {}
+      table.insert(parts, "\n")
+      table.insert(parts, printCommentsAbove("", ns.referClojureCommentsAbove, "  "))
+      table.insert(parts, "  (:refer-clojure :rename {")
+      table.insert(parts, formatRenamesList(ns.referClojure.rename))
+      table.insert(parts, "})")
+      return table.concat(parts)
     elseif numPlatforms == 1 and allRenamesForSamePlatform then
-      local s = strConcat3("\n  #?(", platforms[1], "\n")
-      s = printCommentsAbove(s, ns.referClojureCommentsAbove, "     ")
-      s = strConcat(s, "     (:refer-clojure :rename {")
-      s = strConcat(s, formatRenamesList(ns.referClojure.rename))
-      s = strConcat(s, "}))")
-      return s
+      local parts = {}
+      table.insert(parts, "\n  #?(")
+      table.insert(parts, platforms[1])
+      table.insert(parts, "\n")
+      table.insert(parts, printCommentsAbove("", ns.referClojureCommentsAbove, "     "))
+      table.insert(parts, "     (:refer-clojure :rename {")
+      table.insert(parts, formatRenamesList(ns.referClojure.rename))
+      table.insert(parts, "}))")
+      return table.concat(parts)
     else
-      local s = "\n  (:refer-clojure\n    :rename {"
-      s = strConcat(s, formatRenamesList(nonPlatformSpecificRenames))
-      s = strConcat(s, "\n             #?@(")
+      local parts = {}
+      table.insert(parts, "\n  (:refer-clojure\n    :rename {")
+      table.insert(parts, formatRenamesList(nonPlatformSpecificRenames))
+      table.insert(parts, "\n             #?@(")
 
       local platformIdx = 0
       while platformIdx < numPlatforms do
@@ -3553,46 +3556,48 @@ local function formatReferClojure(ns)
         local platformRenames = filterOnPlatform(ns.referClojure.rename, platformStr)
 
         if platformIdx == 0 then
-          s = strConcat3(s, platformStr, " [")
+          table.insert(parts, platformStr)
+          table.insert(parts, " [")
         else
-          s = strConcat(s, "\n                 ")
-          s = strConcat3(s, platformStr, " [")
+          table.insert(parts, "\n                 ")
+          table.insert(parts, platformStr)
+          table.insert(parts, " [")
         end
-        s = strConcat(s, formatRenamesList(platformRenames))
-        s = strConcat(s, "]")
+        table.insert(parts, formatRenamesList(platformRenames))
+        table.insert(parts, "]")
 
         platformIdx = platformIdx + 1
       end
 
-      s = strConcat(s, ")})")
-
-      return s
+      table.insert(parts, ")})")
+      return table.concat(parts)
     end
 
   -- there are multiple keys, put each one on it's own line
   else
-    local s = "\n  (:refer-clojure"
+    local parts = {}
+    table.insert(parts, "\n  (:refer-clojure")
 
     if ns.referClojure.exclude and arraySize(ns.referClojure.exclude) > 0 then
       local excludeSymbols = arrayPluck(ns.referClojure.exclude, "symbol")
-      s = strConcat(s, "\n    ")
-      s = strConcat(s, formatKeywordFollowedByListOfSymbols(":exclude", excludeSymbols))
+      table.insert(parts, "\n    ")
+      table.insert(parts, formatKeywordFollowedByListOfSymbols(":exclude", excludeSymbols))
     end
 
     if ns.referClojure.only and arraySize(ns.referClojure.only) > 0 then
       local onlySymbols = arrayPluck(ns.referClojure.only, "symbol")
-      s = strConcat(s, "\n    ")
-      s = strConcat(s, formatKeywordFollowedByListOfSymbols(":only", onlySymbols))
+      table.insert(parts, "\n    ")
+      table.insert(parts, formatKeywordFollowedByListOfSymbols(":only", onlySymbols))
     end
 
     if ns.referClojure.rename and arraySize(ns.referClojure.rename) > 0 then
-      s = strConcat(s, "\n    :rename {")
-      s = strConcat(s, formatRenamesList(ns.referClojure.rename))
-      s = strConcat(s, "}")
+      table.insert(parts, "\n    :rename {")
+      table.insert(parts, formatRenamesList(ns.referClojure.rename))
+      table.insert(parts, "}")
     end
 
-    s = strConcat(s, ")")
-    return s
+    table.insert(parts, ")")
+    return table.concat(parts)
 
     -- FIXME - I need to create some tests cases for this
     -- return 'FIXME: handle reader conditionals for multiple :refer-clojure keys'
@@ -3600,7 +3605,7 @@ local function formatReferClojure(ns)
 end
 
 local function formatNs(ns)
-  local outTxt = strConcat("(ns ", ns.nsSymbol)
+  local txtChunks = { "(ns ", ns.nsSymbol }
 
   local numRequireMacros = 0
   if isArray(ns.requireMacros) then
@@ -3630,38 +3635,40 @@ local function formatNs(ns)
   local trailingParensArePrinted = false
 
   if isString(ns.docstring) then
-    outTxt = strConcat(outTxt, '\n  "')
-    outTxt = strConcat(outTxt, ns.docstring)
-    outTxt = strConcat(outTxt, '"')
+    txtChunks[#txtChunks + 1] = '\n  "'
+    txtChunks[#txtChunks + 1] = ns.docstring
+    txtChunks[#txtChunks + 1] = '"'
   end
 
   if isArray(ns.nsMetadata) then
     local numMetadataItms = arraySize(ns.nsMetadata)
     if numMetadataItms > 0 then
       local metadataItmsIdx = 0
-      outTxt = strConcat(outTxt, "\n  {")
+      txtChunks[#txtChunks + 1] = "\n  {"
       while metadataItmsIdx < numMetadataItms do
         local metadataItm = ns.nsMetadata[metadataItmsIdx + 1] -- Lua arrays are 1-based
-        outTxt = strConcat3(outTxt, metadataItm.key, " ")
-        outTxt = strConcat(outTxt, metadataItm.value)
+        txtChunks[#txtChunks + 1] = metadataItm.key
+        txtChunks[#txtChunks + 1] = " "
+        txtChunks[#txtChunks + 1] = metadataItm.value
         metadataItmsIdx = metadataItmsIdx + 1
         if metadataItmsIdx ~= numMetadataItms then
-          outTxt = strConcat(outTxt, "\n   ")
+          txtChunks[#txtChunks + 1] = "\n   "
         end
       end
-      outTxt = strConcat(outTxt, "}")
+      txtChunks[#txtChunks + 1] = "}"
     end
   end
 
   -- FIXME - we need reader conditionals for :refer-clojure here
   if ns.referClojure then
-    outTxt = strConcat(outTxt, formatReferClojure(ns))
+    txtChunks[#txtChunks + 1] = formatReferClojure(ns)
 
     if isStringWithChars(ns.referClojureCommentAfter) then
       if referClojureIsLastMainForm then
         commentOutsideNsForm2 = ns.referClojureCommentAfter
       else
-        outTxt = strConcat3(outTxt, " ", ns.referClojureCommentAfter)
+        txtChunks[#txtChunks + 1] = " "
+        txtChunks[#txtChunks + 1] = ns.referClojureCommentAfter
       end
     end
   end
@@ -3673,50 +3680,52 @@ local function formatNs(ns)
 
     local rmIndentation = "   "
     if wrapRequireMacrosWithReaderConditional then
-      outTxt = strConcat(outTxt, "\n")
-      outTxt = strConcat(outTxt, "  #?(:cljs\n")
-      outTxt = printCommentsAbove(outTxt, ns.requireMacrosCommentsAbove, "     ")
-      outTxt = strConcat(outTxt, "     (:require-macros\n")
-
+      txtChunks[#txtChunks + 1] = "\n  #?(:cljs\n"
+      txtChunks = { printCommentsAbove(table.concat(txtChunks), ns.requireMacrosCommentsAbove, "     ") }
+      txtChunks[#txtChunks + 1] = "     (:require-macros\n"
       rmIndentation = "      "
     else
-      outTxt = strConcat(outTxt, "\n")
-      outTxt = printCommentsAbove(outTxt, ns.requireMacrosCommentsAbove, "  ")
-      outTxt = strConcat(outTxt, "  (:require-macros\n")
+      txtChunks[#txtChunks + 1] = "\n"
+      txtChunks = { printCommentsAbove(table.concat(txtChunks), ns.requireMacrosCommentsAbove, "  ") }
+      txtChunks[#txtChunks + 1] = "  (:require-macros\n"
     end
 
     local rmIdx = 0
     while rmIdx < numRequireMacros do
       local rm = ns.requireMacros[rmIdx + 1] -- Lua arrays are 1-based
       local isLastRequireMacroLine = (rmIdx + 1) == numRequireMacros
-      outTxt = strConcat(outTxt, formatRequireLine(rm, rmIndentation))
+      txtChunks[#txtChunks + 1] = formatRequireLine(rm, rmIndentation)
+
       if isStringWithChars(rm.commentAfter) then
         if isLastRequireMacroLine then
           rmLastLineCommentAfter = rm.commentAfter
         else
-          outTxt = strConcat3(outTxt, " ", rm.commentAfter)
+          txtChunks[#txtChunks + 1] = " "
+          txtChunks[#txtChunks + 1] = rm.commentAfter
         end
       end
+
       if not isLastRequireMacroLine then
-        outTxt = strConcat(outTxt, "\n")
+        txtChunks[#txtChunks + 1] = "\n"
       end
       rmIdx = rmIdx + 1
     end
 
     if not requireMacrosIsLastMainForm and not wrapRequireMacrosWithReaderConditional then
-      outTxt = strConcat(outTxt, ")")
+      txtChunks[#txtChunks + 1] = ")"
     elseif not requireMacrosIsLastMainForm and wrapRequireMacrosWithReaderConditional then
-      outTxt = strConcat(outTxt, "))")
+      txtChunks[#txtChunks + 1] = "))"
     elseif requireMacrosIsLastMainForm and not wrapRequireMacrosWithReaderConditional then
-      outTxt = strConcat(outTxt, "))")
+      txtChunks[#txtChunks + 1] = "))"
       trailingParensArePrinted = true
     elseif requireMacrosIsLastMainForm and wrapRequireMacrosWithReaderConditional then
-      outTxt = strConcat(outTxt, ")))")
+      txtChunks[#txtChunks + 1] = ")))"
       trailingParensArePrinted = true
     end
 
     if isStringWithChars(rmLastLineCommentAfter) then
-      outTxt = strConcat3(outTxt, " ", rmLastLineCommentAfter)
+      txtChunks[#txtChunks + 1] = " "
+      txtChunks[#txtChunks + 1] = rmLastLineCommentAfter
     end
   end
 
@@ -3737,54 +3746,54 @@ local function formatNs(ns)
 
     local requireLineIndentation = "   "
     if allRequiresUnderOnePlatform then
-      outTxt = strConcat(outTxt, "\n  #?(")
-      outTxt = strConcat(outTxt, reqPlatforms[1])
+      txtChunks[#txtChunks + 1] = "\n  #?("
+      txtChunks[#txtChunks + 1] = reqPlatforms[1]
 
       if isArray(ns.requireCommentsAbove) and arraySize(ns.requireCommentsAbove) > 0 then
-        outTxt = strConcat(outTxt, "\n     ")
-        outTxt = strConcat(outTxt, strJoin(ns.requireCommentsAbove, "\n     "))
+        txtChunks[#txtChunks + 1] = "\n     "
+        txtChunks[#txtChunks + 1] = strJoin(ns.requireCommentsAbove, "\n     ")
       end
 
-      outTxt = strConcat(outTxt, "\n     (:require")
+      txtChunks[#txtChunks + 1] = "\n     (:require"
       if isString(ns.requireCommentAfter) and ns.requireCommentAfter ~= "" then
-        outTxt = strConcat3(outTxt, " ", ns.requireCommentAfter)
+        txtChunks[#txtChunks + 1] = " "
+        txtChunks[#txtChunks + 1] = ns.requireCommentAfter
       end
-      outTxt = strConcat(outTxt, "\n")
+      txtChunks[#txtChunks + 1] = "\n"
 
       requireLineIndentation = "      "
     else
       if isArray(ns.requireCommentsAbove) and arraySize(ns.requireCommentsAbove) > 0 then
-        outTxt = strConcat(outTxt, "\n  ")
-        outTxt = strConcat(outTxt, strJoin(ns.requireCommentsAbove, "\n  "))
+        txtChunks[#txtChunks + 1] = "\n  "
+        txtChunks[#txtChunks + 1] = strJoin(ns.requireCommentsAbove, "\n  ")
       end
-      outTxt = strConcat(outTxt, "\n  (:require\n")
+      txtChunks[#txtChunks + 1] = "\n  (:require\n"
     end
 
     local requiresIdx = 0
     while requiresIdx < numRequires do
       local req = ns.requires[requiresIdx + 1] -- Lua arrays are 1-based
-      -- NOTE: I am not sure this works correctly with reader conditionals
       local isLastRequire1 = (requiresIdx + 1) == numRequires
 
       if not req.platform or allRequiresUnderOnePlatform then
-        outTxt = strConcat(outTxt, formatRequireLine(req, requireLineIndentation))
+        txtChunks[#txtChunks + 1] = formatRequireLine(req, requireLineIndentation)
 
         if req.commentAfter and not isLastRequire1 then
-          outTxt = strConcat(outTxt, " ")
-          outTxt = strConcat(outTxt, req.commentAfter)
-          outTxt = strConcat(outTxt, "\n")
+          txtChunks[#txtChunks + 1] = " "
+          txtChunks[#txtChunks + 1] = req.commentAfter
+          txtChunks[#txtChunks + 1] = "\n"
         elseif isLastRequire1 and req.commentAfter and requireIsLastMainForm and not allRequiresUnderOnePlatform then
-          closeRequireParenTrail = strConcat(")) ", req.commentAfter)
+          closeRequireParenTrail = ")) " .. req.commentAfter
           trailingParensArePrinted = true
         elseif isLastRequire1 and req.commentAfter and allRequiresUnderOnePlatform then
           lastRequireComment = req.commentAfter
           lastRequireHasComment = true
         elseif isLastRequire1 and req.commentAfter then
-          closeRequireParenTrail = strConcat(") ", req.commentAfter)
+          closeRequireParenTrail = ") " .. req.commentAfter
         elseif isLastRequire1 and not req.commentAfter then
           closeRequireParenTrail = ")"
         else
-          outTxt = strConcat(outTxt, "\n")
+          txtChunks[#txtChunks + 1] = "\n"
         end
       end
 
@@ -3792,7 +3801,6 @@ local function formatNs(ns)
     end
 
     local platformIdx = 0
-
     local requireBlockHasReaderConditionals = numPlatforms > 0
     local useStandardReaderConditional = onlyOneRequirePerPlatform(ns.requires)
 
@@ -3803,20 +3811,20 @@ local function formatNs(ns)
           local platform = reqPlatforms[platformIdx + 1]
 
           if platformIdx == 0 then
-            outTxt = strTrim(outTxt)
-            outTxt = strConcat3(outTxt, "\n   #?(", platform)
-            outTxt = strConcat(outTxt, " ")
+            txtChunks = { strTrim(table.concat(txtChunks)) }
+            txtChunks[#txtChunks + 1] = "\n   #?("
+            txtChunks[#txtChunks + 1] = platform
+            txtChunks[#txtChunks + 1] = " "
           else
-            outTxt = strConcat(outTxt, "\n      ")
-            outTxt = strConcat3(outTxt, platform, " ")
+            txtChunks[#txtChunks + 1] = "\n      "
+            txtChunks[#txtChunks + 1] = platform
+            txtChunks[#txtChunks + 1] = " "
           end
 
           -- only look at requires for this platform
           local platformRequires = filterOnPlatform(ns.requires, platform)
           local req = platformRequires[1]
-          outTxt = strConcat(outTxt, formatRequireLine(req, ""))
-
-          -- FIXME: need to add commentsBefore and commentsAfter here
+          txtChunks[#txtChunks + 1] = formatRequireLine(req, "")
 
           platformIdx = platformIdx + 1
         end
@@ -3827,12 +3835,14 @@ local function formatNs(ns)
           local isLastPlatform = (platformIdx + 1) == numPlatforms
 
           if platformIdx == 0 then
-            outTxt = strTrim(outTxt)
-            outTxt = strConcat(outTxt, "\n   #?@(")
-            outTxt = strConcat3(outTxt, platform, "\n       [")
+            txtChunks = { strTrim(table.concat(txtChunks)) }
+            txtChunks[#txtChunks + 1] = "\n   #?@("
+            txtChunks[#txtChunks + 1] = platform
+            txtChunks[#txtChunks + 1] = "\n       ["
           else
-            outTxt = strConcat(outTxt, "\n\n       ")
-            outTxt = strConcat3(outTxt, platform, "\n       [")
+            txtChunks[#txtChunks + 1] = "\n\n       "
+            txtChunks[#txtChunks + 1] = platform
+            txtChunks[#txtChunks + 1] = "\n       ["
           end
 
           -- only look at requires for this platform
@@ -3846,35 +3856,36 @@ local function formatNs(ns)
             local isLastRequireForThisPlatform = (reqIdx2 + 1) == numFilteredReqs
 
             if printedFirstReqLine then
-              outTxt = strConcat(outTxt, formatRequireLine(req, "        "))
+              txtChunks[#txtChunks + 1] = formatRequireLine(req, "        ")
             else
               printedFirstReqLine = true
-              outTxt = strConcat(outTxt, formatRequireLine(req, ""))
+              txtChunks[#txtChunks + 1] = formatRequireLine(req, "")
             end
 
             if req.commentAfter and not isLastRequireForThisPlatform then
-              outTxt = strConcat(outTxt, " ")
-              outTxt = strConcat(outTxt, req.commentAfter)
-              outTxt = strConcat(outTxt, "\n")
+              txtChunks[#txtChunks + 1] = " "
+              txtChunks[#txtChunks + 1] = req.commentAfter
+              txtChunks[#txtChunks + 1] = "\n"
             elseif req.commentAfter and isLastRequireForThisPlatform and not isLastPlatform then
-              outTxt = strConcat3(outTxt, "] ", req.commentAfter)
+              txtChunks[#txtChunks + 1] = "] "
+              txtChunks[#txtChunks + 1] = req.commentAfter
               printPlatformClosingBracket = false
             elseif req.commentAfter and isLastRequireForThisPlatform and (isLastPlatform or requireIsLastMainForm) then
               lastRequireHasComment = true
               lastRequireComment = req.commentAfter
             elseif isLastRequireForThisPlatform and req.commentAfter then
-              closeRequireParenTrail = strConcat(") ", req.commentAfter)
+              closeRequireParenTrail = ") " .. req.commentAfter
             elseif isLastRequireForThisPlatform and not req.commentAfter then
               closeRequireParenTrail = "]"
             else
-              outTxt = strConcat(outTxt, "\n")
+              txtChunks[#txtChunks + 1] = "\n"
             end
 
             reqIdx2 = reqIdx2 + 1
           end
 
           if printPlatformClosingBracket then
-            outTxt = strConcat(outTxt, "]")
+            txtChunks[#txtChunks + 1] = "]"
           end
 
           platformIdx = platformIdx + 1
@@ -3882,35 +3893,28 @@ local function formatNs(ns)
       end
     end
 
-    -- closeRequireParenTrail can be one of six options:
-    -- - )             <-- no reader conditional, no comment on the last item, not the last main form
-    -- - ) <comment>   <-- no reader conditional, comment on the last itm, not the last main form
-    -- - ))            <-- reader conditional, no comment on the last itm, not the last main form
-    -- - )) <comment>  <-- reader conditional, comment on last itm, not the last main form
-    -- - )))           <-- reader conditional, no comment on last itm, :require is last main form
-    -- - ))) <comment> <-- reader conditional, comment on last itm, :require is last main form
+    -- closeRequireParenTrail logic
     if not requireBlockHasReaderConditionals and not lastRequireHasComment and not requireIsLastMainForm then
       closeRequireParenTrail = ")"
     elseif not requireBlockHasReaderConditionals and lastRequireHasComment and not requireIsLastMainForm then
-      closeRequireParenTrail = strConcat(") ", lastRequireComment)
+      closeRequireParenTrail = ") " .. lastRequireComment
     elseif requireBlockHasReaderConditionals and not lastRequireHasComment and not requireIsLastMainForm then
       closeRequireParenTrail = "))"
     elseif requireBlockHasReaderConditionals and lastRequireHasComment and not requireIsLastMainForm then
-      closeRequireParenTrail = strConcat(")) ", lastRequireComment)
+      closeRequireParenTrail = ")) " .. lastRequireComment
     elseif requireBlockHasReaderConditionals and not lastRequireHasComment and requireIsLastMainForm then
       closeRequireParenTrail = ")))"
       trailingParensArePrinted = true
     elseif requireBlockHasReaderConditionals and lastRequireHasComment and requireIsLastMainForm then
-      closeRequireParenTrail = strConcat("))) ", lastRequireComment)
+      closeRequireParenTrail = "))) " .. lastRequireComment
       trailingParensArePrinted = true
     end
 
-    outTxt = strTrim(outTxt)
-    outTxt = strConcat(outTxt, closeRequireParenTrail)
+    txtChunks = { strTrim(table.concat(txtChunks)) }
+    txtChunks[#txtChunks + 1] = closeRequireParenTrail
   end -- end :require printing
 
   if numImports > 0 then
-    -- collect imports that are platform-specific (or not)
     local nonPlatformSpecificImports = filterOnPlatform(ns.imports, false)
     local numNonPlatformSpecificImports = arraySize(nonPlatformSpecificImports)
     local importPlatforms = getPlatformsFromArray(ns.imports)
@@ -3922,32 +3926,34 @@ local function formatNs(ns)
     local importsIdx = 0
     while importsIdx < numNonPlatformSpecificImports do
       if not isImportKeywordPrinted then
-        outTxt = strConcat(outTxt, "\n  (:import\n")
+        txtChunks[#txtChunks + 1] = "\n  (:import\n"
         isImportKeywordPrinted = true
       end
 
       local imp = nonPlatformSpecificImports[importsIdx + 1]
       local isLastImport = (importsIdx + 1) == numNonPlatformSpecificImports
 
-      outTxt = strConcat3(outTxt, "   (", imp.package)
+      txtChunks[#txtChunks + 1] = "   ("
+      txtChunks[#txtChunks + 1] = imp.package
 
       local numClasses = arraySize(imp.classes)
       local classNameIdx = 0
       while classNameIdx < numClasses do
         local className = imp.classes[classNameIdx + 1]
-        outTxt = strConcat3(outTxt, " ", className)
-
+        txtChunks[#txtChunks + 1] = " "
+        txtChunks[#txtChunks + 1] = className
         classNameIdx = classNameIdx + 1
       end
 
-      outTxt = strConcat(outTxt, ")")
+      txtChunks[#txtChunks + 1] = ")"
 
       if isStringWithChars(imp.commentAfter) then
-        outTxt = strConcat3(outTxt, " ", imp.commentAfter)
+        txtChunks[#txtChunks + 1] = " "
+        txtChunks[#txtChunks + 1] = imp.commentAfter
       end
 
       if not isLastImport then
-        outTxt = strConcat(outTxt, "\n")
+        txtChunks[#txtChunks + 1] = "\n"
       end
 
       importsIdx = importsIdx + 1
@@ -3962,23 +3968,23 @@ local function formatNs(ns)
       local platformStr = importPlatforms[platformIdx + 1]
 
       if placeReaderConditionalOutsideOfImport then
-        outTxt = strConcat(outTxt, "\n  #?(")
-        outTxt = strConcat(outTxt, platformStr)
-        outTxt = strConcat(outTxt, "\n")
-        outTxt = strConcat(outTxt, "     (:import\n")
-        outTxt = strConcat(outTxt, "      ")
+        txtChunks[#txtChunks + 1] = "\n  #?("
+        txtChunks[#txtChunks + 1] = platformStr
+        txtChunks[#txtChunks + 1] = "\n     (:import\n      "
         isImportKeywordPrinted = true
       elseif isFirstPlatform then
         if not isImportKeywordPrinted then
-          outTxt = strConcat(outTxt, "\n  (:import")
+          txtChunks[#txtChunks + 1] = "\n  (:import"
           isImportKeywordPrinted = true
         end
-        outTxt = strConcat3(outTxt, "\n   #?@(", platformStr)
-        outTxt = strConcat(outTxt, "\n       [")
+        txtChunks[#txtChunks + 1] = "\n   #?@("
+        txtChunks[#txtChunks + 1] = platformStr
+        txtChunks[#txtChunks + 1] = "\n       ["
         isFirstPlatform = false
       else
-        outTxt = strConcat3(outTxt, "\n\n       ", platformStr)
-        outTxt = strConcat(outTxt, "\n       [")
+        txtChunks[#txtChunks + 1] = "\n\n       "
+        txtChunks[#txtChunks + 1] = platformStr
+        txtChunks[#txtChunks + 1] = "\n       ["
       end
 
       local importsForThisPlatform = filterOnPlatform(ns.imports, platformStr)
@@ -3988,27 +3994,28 @@ local function formatNs(ns)
         local imp = importsForThisPlatform[idx2 + 1]
         local isLastImport2 = (idx2 + 1) == numImports2
 
-        outTxt = strConcat(outTxt, "(")
-        outTxt = strConcat(outTxt, imp.package)
-        outTxt = strConcat(outTxt, " ")
-        outTxt = strConcat(outTxt, strJoin(imp.classes, " "))
-        outTxt = strConcat(outTxt, ")")
+        txtChunks[#txtChunks + 1] = "("
+        txtChunks[#txtChunks + 1] = imp.package
+        txtChunks[#txtChunks + 1] = " "
+        txtChunks[#txtChunks + 1] = strJoin(imp.classes, " ")
+        txtChunks[#txtChunks + 1] = ")"
 
         if isLastImport2 then
           if not placeReaderConditionalOutsideOfImport then
-            outTxt = strConcat(outTxt, "]")
+            txtChunks[#txtChunks + 1] = "]"
           end
           if isStringWithChars(imp.commentAfter) then
             lastImportLineCommentAfter = imp.commentAfter
           end
         else
           if isStringWithChars(imp.commentAfter) then
-            outTxt = strConcat3(outTxt, " ", imp.commentAfter)
+            txtChunks[#txtChunks + 1] = " "
+            txtChunks[#txtChunks + 1] = imp.commentAfter
           end
           if placeReaderConditionalOutsideOfImport then
-            outTxt = strConcat(outTxt, "\n      ")
+            txtChunks[#txtChunks + 1] = "\n      "
           else
-            outTxt = strConcat(outTxt, "\n        ")
+            txtChunks[#txtChunks + 1] = "\n        "
           end
         end
 
@@ -4027,25 +4034,28 @@ local function formatNs(ns)
       trailingParensArePrinted = true
     end
 
-    outTxt = strConcat(outTxt, closeImportParenTrail)
+    txtChunks[#txtChunks + 1] = closeImportParenTrail
 
     if isStringWithChars(lastImportLineCommentAfter) then
-      outTxt = strConcat3(outTxt, " ", lastImportLineCommentAfter)
+      txtChunks[#txtChunks + 1] = " "
+      txtChunks[#txtChunks + 1] = lastImportLineCommentAfter
     end
   end -- end :import section
 
   if hasGenClass then
     local genClassIndentationLevel = 2
-    outTxt = strConcat(outTxt, "\n")
+    txtChunks[#txtChunks + 1] = "\n"
     local isGenClassBehindReaderConditional = ns.genClass.platform == ":clj"
     if isGenClassBehindReaderConditional then
-      outTxt = strConcat(outTxt, "  #?(:clj\n")
+      txtChunks[#txtChunks + 1] = "  #?(:clj\n"
       genClassIndentationLevel = 5
     end
     local indentationStr = repeatString(" ", genClassIndentationLevel)
-    outTxt = printCommentsAbove(outTxt, ns.genClass.commentsAbove, indentationStr)
-    outTxt = strConcat(outTxt, indentationStr)
-    outTxt = strConcat(outTxt, "(:gen-class")
+
+    txtChunks = { printCommentsAbove(table.concat(txtChunks), ns.genClass.commentsAbove, indentationStr) }
+    txtChunks[#txtChunks + 1] = indentationStr
+    txtChunks[#txtChunks + 1] = "(:gen-class"
+
     local commentAfterGenClass = nil
     if ns.genClass.isEmpty then
       if isStringWithChars(ns.genClass.commentAfter) then
@@ -4053,45 +4063,49 @@ local function formatNs(ns)
       end
     else
       if isStringWithChars(ns.genClass.commentAfter) then
-        outTxt = strConcat3(outTxt, " ", ns.genClass.commentAfter)
+        txtChunks[#txtChunks + 1] = " "
+        txtChunks[#txtChunks + 1] = ns.genClass.commentAfter
       end
       local genClassValueIndentationLevel = genClassIndentationLevel + 1
       local indentationStr2 = repeatString(" ", genClassValueIndentationLevel)
 
-      -- print the :gen-class keys in the order in which they appear in the clojure.core.genclass documentation
-      -- https://github.com/clojure/clojure/blob/clojure-1.11.1/src/clj/clojure/genclass.clj#L507
       local idx3 = 1
       local numGenClassKeys = arraySize(genClassKeys)
       while idx3 <= numGenClassKeys do
         local genClassKey = genClassKeys[idx3]
         local genClassValue = ns.genClass[genClassKey]
         if genClassValue then
-          -- print the comment from the previous line if necessary
           if isStringWithChars(commentAfterGenClass) then
-            outTxt = strConcat3(outTxt, " ", commentAfterGenClass)
+            txtChunks[#txtChunks + 1] = " "
+            txtChunks[#txtChunks + 1] = commentAfterGenClass
             commentAfterGenClass = nil
           end
-          outTxt = strConcat(outTxt, "\n")
-          outTxt = printCommentsAbove(outTxt, genClassValue.commentsAbove, indentationStr2)
-          outTxt = strConcat(outTxt, indentationStr2)
-          outTxt = strConcat3(outTxt, ":", genClassKey)
+          txtChunks[#txtChunks + 1] = "\n"
+          txtChunks = { printCommentsAbove(table.concat(txtChunks), genClassValue.commentsAbove, indentationStr2) }
+          txtChunks[#txtChunks + 1] = indentationStr2
+          txtChunks[#txtChunks + 1] = ":"
+          txtChunks[#txtChunks + 1] = genClassKey
 
           if genClassKey == "implements" then
             local numInterfaces = arraySize(genClassValue)
             local interfaceIdx = 0
             while interfaceIdx < numInterfaces do
               if interfaceIdx == 0 then
-                outTxt = strConcat3(outTxt, " [", genClassValue[interfaceIdx + 1].symbol) -- Lua arrays are 1-based
+                txtChunks[#txtChunks + 1] = " ["
+                txtChunks[#txtChunks + 1] = genClassValue[interfaceIdx + 1].symbol
               else
-                outTxt = strConcat3(outTxt, " ", genClassValue[interfaceIdx + 1].symbol) -- Lua arrays are 1-based
+                txtChunks[#txtChunks + 1] = " "
+                txtChunks[#txtChunks + 1] = genClassValue[interfaceIdx + 1].symbol
               end
               interfaceIdx = interfaceIdx + 1
             end
             if numInterfaces > 0 then
-              outTxt = strConcat(outTxt, "]")
+              txtChunks[#txtChunks + 1] = "]"
             end
           else
-            outTxt = strConcat3(outTxt, " ", genClassValue.value)
+            -- Ensure boolean values like `:main true` don't crash table.concat
+            txtChunks[#txtChunks + 1] = " "
+            txtChunks[#txtChunks + 1] = tostring(genClassValue.value)
           end
 
           if isStringWithChars(genClassValue.commentAfter) then
@@ -4101,30 +4115,34 @@ local function formatNs(ns)
         idx3 = idx3 + 1
       end
     end
+
     if not isGenClassBehindReaderConditional and not commentAfterGenClass then
-      outTxt = strConcat(outTxt, "))")
+      txtChunks[#txtChunks + 1] = "))"
       trailingParensArePrinted = true
     elseif isGenClassBehindReaderConditional and not commentAfterGenClass then
-      outTxt = strConcat(outTxt, ")))")
+      txtChunks[#txtChunks + 1] = ")))"
       trailingParensArePrinted = true
     elseif not isGenClassBehindReaderConditional and isStringWithChars(commentAfterGenClass) then
-      outTxt = strConcat3(outTxt, ")) ", commentAfterGenClass)
+      txtChunks[#txtChunks + 1] = ")) "
+      txtChunks[#txtChunks + 1] = commentAfterGenClass
       trailingParensArePrinted = true
     elseif isGenClassBehindReaderConditional and isStringWithChars(commentAfterGenClass) then
-      outTxt = strConcat3(outTxt, "))) ", commentAfterGenClass)
+      txtChunks[#txtChunks + 1] = "))) "
+      txtChunks[#txtChunks + 1] = commentAfterGenClass
       trailingParensArePrinted = true
     end
   end -- end :gen-class section
 
   if not trailingParensArePrinted then
-    outTxt = strConcat(outTxt, ")")
+    txtChunks[#txtChunks + 1] = ")"
   end
 
   if isStringWithChars(commentOutsideNsForm2) then
-    outTxt = strConcat3(outTxt, " ", commentOutsideNsForm2)
+    txtChunks[#txtChunks + 1] = " "
+    txtChunks[#txtChunks + 1] = commentOutsideNsForm2
   end
 
-  return outTxt
+  return table.concat(txtChunks)
 end
 
 -- Continuation of the format() function, with the input text parsed into nodes
@@ -4135,7 +4153,7 @@ local function formatNodes(nodesArr, parsedNs)
 
   local parenNestingDepth = 0
   local idx = 1
-  local outTxt = ""
+  local txtChunks = {}
   local outputTxtContainsChars = false
   local lineTxt = ""
   local lineIdx = 0
@@ -4158,13 +4176,13 @@ local function formatNodes(nodesArr, parsedNs)
       insideTheIgnoreZone = true
 
       -- dump the current lineTxt when we start the ignore zone
-      outTxt = strConcat(outTxt, lineTxt)
+      txtChunks[#txtChunks + 1] = lineTxt
       lineTxt = ""
     end
 
     if insideTheIgnoreZone then
       if isString(node.text) and node.text ~= "" then
-        outTxt = strConcat(outTxt, node.text)
+        txtChunks[#txtChunks + 1] = node.text
       end
 
       if node.id == ignoreNodesEndId then
@@ -4185,7 +4203,7 @@ local function formatNodes(nodesArr, parsedNs)
 
       if nsStartStringIdx == -1 and parenNestingDepth == 1 and hasParsedNsForm and isNsNode(node) then
         insideNsForm = true
-        nsStartStringIdx = strLen(strConcat(outTxt, lineTxt))
+        nsStartStringIdx = strLen(table.concat(txtChunks) .. lineTxt)
       end
 
       local nextTextNode = findNextNodeWithText(nodesArr, idx + 1)
@@ -4290,7 +4308,7 @@ local function formatNodes(nodesArr, parsedNs)
         -- flag the end of the ns form
         if insideNsForm and parenNestingDepth == 0 then
           insideNsForm = false
-          nsEndStringIdx = strLen(strConcat(outTxt, lineTxt))
+          nsEndStringIdx = strLen(table.concat(txtChunks) .. lineTxt)
           lineIdxOfClosingNsForm = lineIdx
         end
       end
@@ -4356,7 +4374,7 @@ local function formatNodes(nodesArr, parsedNs)
             if isParenCloser(parenTrailCloserNode) then
               -- NOTE: we are adjusting the current line here, but we do not update the nodesWeHavePrintedOnThisLine
               -- because we cannot have a Rule 3 alignment to a closer node
-              lineTxt = strConcat(lineTxt, parenTrailCloserNode.text)
+              lineTxt = lineTxt .. parenTrailCloserNode.text
 
               parenTrailCloserNode.text = ""
               parenTrailCloserNode._wasSlurpedUp = true
@@ -4370,7 +4388,7 @@ local function formatNodes(nodesArr, parsedNs)
 
           -- re-print the whitespace node if necessary
           if lineTxtHasBeenRightTrimmed then
-            lineTxt = strConcat(lineTxt, lastNodeWePrinted.text)
+            lineTxt = lineTxt .. lastNodeWePrinted.text
           end
         end
       end
@@ -4507,14 +4525,14 @@ local function formatNodes(nodesArr, parsedNs)
           if isCommaNode(node) then
             local nextLineCommaTrail = removeLeadingWhitespace(node.text)
             local trimmedCommaTrail = rtrim(nextLineCommaTrail)
-            indentationStr = strConcat(indentationStr, trimmedCommaTrail)
+            indentationStr = indentationStr .. trimmedCommaTrail
           end
 
-          -- add this line to the outTxt and reset lineTxt
+          -- add this line to the txtChunks and reset lineTxt
           if strTrim(lineTxt) ~= "" then
-            outTxt = strConcat(outTxt, lineTxt)
+            txtChunks[#txtChunks + 1] = lineTxt
           end
-          outTxt = strConcat(outTxt, newlineStr)
+          txtChunks[#txtChunks + 1] = newlineStr
 
           lineTxt = indentationStr
           nodesWeHavePrintedOnThisLine = {}
@@ -4546,7 +4564,7 @@ local function formatNodes(nodesArr, parsedNs)
             nodeTxt = strReplaceFirst(nodeTxt, "^(;+)([^ ])", "%1 %2") -- Lua regex syntax
           end
           if commentNeedsSpaceBefore(lineTxt, nodeTxt) then
-            nodeTxt = strConcat(" ", nodeTxt)
+            nodeTxt = " " .. nodeTxt
           end
         end
 
@@ -4571,7 +4589,7 @@ local function formatNodes(nodesArr, parsedNs)
         -- add the text of this node to the current line
         if not skipPrintingThisNode then
           local lineLengthBeforePrintingNode = strLen(lineTxt)
-          lineTxt = strConcat(lineTxt, nodeTxt)
+          lineTxt = lineTxt .. nodeTxt
 
           if lineTxt ~= "" then
             outputTxtContainsChars = true
@@ -4585,7 +4603,7 @@ local function formatNodes(nodesArr, parsedNs)
         end
 
         if addSpaceAfterThisNode then
-          lineTxt = strConcat(lineTxt, " ")
+          lineTxt = lineTxt .. " "
         end
 
         -- update the colIdx
@@ -4596,14 +4614,15 @@ local function formatNodes(nodesArr, parsedNs)
     idx = idx + 1
   end -- end looping through the nodes
 
-  -- add the last line to outTxt if necessary
+  -- add the last line to txtChunks if necessary
   if lineTxt ~= "" then
-    outTxt = strConcat(outTxt, lineTxt)
+    txtChunks[#txtChunks + 1] = lineTxt
   end
 
   -- replace the ns form with our formatted version
   if nsStartStringIdx > 0 then
-    local headStr = substr(outTxt, 1, nsStartStringIdx)
+    local currentOutTxt = table.concat(txtChunks)
+    local headStr = substr(currentOutTxt, 1, nsStartStringIdx)
 
     local nsStr = nil
     local success, result = pcall(function()
@@ -4620,18 +4639,18 @@ local function formatNodes(nodesArr, parsedNs)
 
     local tailStr = ""
     if nsEndStringIdx > 0 then
-      tailStr = substr(outTxt, (nsEndStringIdx + 2), -1)
+      tailStr = substr(currentOutTxt, (nsEndStringIdx + 2), -1)
     end
 
-    outTxt = strConcat3(headStr, nsStr, tailStr)
+    txtChunks = { headStr, nsStr, tailStr }
   end
 
   -- remove any leading or trailing whitespace
-  outTxt = strTrim(outTxt)
+  txtChunks = { strTrim(table.concat(txtChunks)) }
 
   return {
     status = "success",
-    out = outTxt,
+    out = table.concat(txtChunks),
   }
 end
 
