@@ -96,7 +96,7 @@ end
 local function dropLast(arr)
   local size = arraySize(arr)
   local newArr = {}
-  for i = 1, dec(size) do
+  for i = 1, (size - 1) do
     newArr[i] = arr[i]
   end
   return newArr
@@ -110,7 +110,7 @@ local function arrayPluck(arr, key)
   while idx <= size do
     local itm = arr[idx]
     arr2[idx] = itm[key]
-    idx = inc(idx)
+    idx = idx + 1
   end
   return arr2
 end
@@ -132,13 +132,13 @@ local function strConcat3(s1, s2, s3)
   return tostring(s1) .. tostring(s2) .. tostring(s3)
 end
 
-function inc(n)
-  return n + 1
-end
+-- function inc(n)
+--   return n + 1
+-- end
 
-local function dec(n)
-  return n - 1
-end
+-- local function dec(n)
+--   return n - 1
+-- end
 
 -- runs aFn(key, value) on every key/value pair inside of obj
 local function objectForEach(obj, aFn)
@@ -165,7 +165,7 @@ end
 -- Stack Operations
 
 local function stackPeek(arr, idxFromBack)
-  local maxIdx = dec(arraySize(arr))
+  local maxIdx = arraySize(arr) - 1
   if idxFromBack > maxIdx then
     return nil
   end
@@ -366,7 +366,7 @@ local function repeatString(text, n)
   local i = 0
   while i < n do
     result = result .. text
-    i = inc(i)
+    i = i + 1
   end
   return result
 end
@@ -428,7 +428,7 @@ end
 local idCounter = 0
 
 local function createId()
-  idCounter = inc(idCounter)
+  idCounter = idCounter + 1
   return idCounter
 end
 
@@ -492,7 +492,7 @@ local function AnyChar(opts)
   n.parse = function(txt, pos)
     if pos <= strLen(txt) then
       return Node({
-        endIdx = inc(pos),
+        endIdx = pos + 1,
         name = opts.name,
         startIdx = pos,
         text = charAt(txt, pos),
@@ -513,7 +513,7 @@ local function Char(opts)
   n.parse = function(txt, pos)
     if pos <= strLen(txt) and charAt(txt, pos) == opts.char then
       return Node({
-        endIdx = inc(pos),
+        endIdx = pos + 1,
         name = opts.name,
         startIdx = pos,
         text = opts.char,
@@ -536,7 +536,7 @@ local function NotChar(opts)
         local charAtThisPos = charAt(txt, pos)
         if charAtThisPos ~= opts.char then
           return Node({
-            endIdx = inc(pos),
+            endIdx = pos + 1,
             name = opts.name,
             startIdx = pos,
             text = charAtThisPos,
@@ -611,10 +611,10 @@ local function stringBodyParser(txt, pos)
     if ch == nil or ch == "" then
       keepSearching = false
     elseif ch == "\\" then
-      local nextChar = charAt(txt, inc(charIdx))
+      local nextChar = charAt(txt, charIdx + 1)
       if isString(nextChar) and nextChar ~= "" then
         parsedTxt = strConcat3(parsedTxt, ch, nextChar)
-        charIdx = inc(charIdx)
+        charIdx = charIdx + 1
       else
         return nil
       end
@@ -625,7 +625,7 @@ local function stringBodyParser(txt, pos)
       parsedTxt = strConcat(parsedTxt, ch)
     end
 
-    charIdx = inc(charIdx)
+    charIdx = charIdx + 1
     if charIdx > maxLength then
       keepSearching = false
     end
@@ -727,10 +727,10 @@ local function tokenParser(txt, pos)
   local parsedTxt = ""
   local firstChar = true
 
-  local firstTwoChars = substr(txt, pos, inc(inc(pos)))
+  local firstTwoChars = substr(txt, pos, pos + 2)
   if firstTwoChars == "##" then
     parsedTxt = "##"
-    charIdx = inc(inc(charIdx))
+    charIdx = charIdx + 2
   end
 
   while keepSearching do
@@ -752,7 +752,7 @@ local function tokenParser(txt, pos)
       keepSearching = false
     end
 
-    charIdx = inc(charIdx)
+    charIdx = charIdx + 1
     if charIdx > maxLength then
       keepSearching = false
     end
@@ -760,7 +760,7 @@ local function tokenParser(txt, pos)
 
   if endIdx > 0 then
     return Node({
-      endIdx = inc(endIdx),
+      endIdx = endIdx + 1,
       name = "token",
       startIdx = pos,
       text = parsedTxt,
@@ -794,10 +794,10 @@ local function specialCharParser(txt, pos)
 
   local firstChar = charAt(txt, pos)
   if firstChar == "\\" then
-    local secondChar = charAt(txt, inc(pos))
+    local secondChar = charAt(txt, pos + 1)
     if specialCharsTbl[secondChar] then
       return Node({
-        endIdx = inc(inc(pos)),
+        endIdx = pos + 2,
         name = "token",
         startIdx = pos,
         text = strConcat(firstChar, secondChar),
@@ -831,7 +831,7 @@ local function whitespaceParser(txt, pos)
       keepSearching = false
     end
 
-    charIdx = inc(charIdx)
+    charIdx = charIdx + 1
     if charIdx > maxLength then
       keepSearching = false
     end
@@ -839,7 +839,7 @@ local function whitespaceParser(txt, pos)
 
   if endIdx > 0 then
     return Node({
-      endIdx = inc(endIdx),
+      endIdx = endIdx + 1,
       name = "whitespace",
       startIdx = pos,
       text = parsedTxt,
@@ -872,7 +872,7 @@ local function Seq(opts)
           -- else this is not a valid sequence: early return
           return nil
         end
-        idx = inc(idx)
+        idx = idx + 1
       end
 
       return Node({
@@ -902,7 +902,7 @@ local function Choice(opts)
         if possibleNode then
           return possibleNode
         end
-        idx = inc(idx)
+        idx = idx + 1
       end
       return nil
     end,
@@ -979,7 +979,7 @@ function appendChildren(childrenArr, node)
       if child then
         appendChildren(childrenArr, child)
       end
-      idx = inc(idx)
+      idx = idx + 1
     end
   end
 end
@@ -1416,7 +1416,7 @@ local function recurseAllChildren(node, f)
     while idx <= numChildren do
       local childNode = node.children[idx]
       recurseAllChildren(childNode, f)
-      idx = inc(idx)
+      idx = idx + 1
     end
   end
   return nil
@@ -1467,7 +1467,7 @@ local function findNextNodeWithText(allNodes, idx)
     if isString(node.text) and node.text ~= "" then
       return node
     end
-    idx = inc(idx)
+    idx = idx + 1
   end
   return null
 end
@@ -1481,7 +1481,7 @@ local function findNextNonWhitespaceNode(allNodes, idx)
     if not isWhitespaceNode(node) then
       return node
     end
-    idx = inc(idx)
+    idx = idx + 1
   end
   return null
 end
@@ -1505,7 +1505,7 @@ local function findPrevNodeWithText(allNodes, startIdx, startingNodeId)
         return node
       end
     end
-    idx = dec(idx)
+    idx = idx - 1
     if idx == 0 then
       keepSearching = false
     end
@@ -1532,7 +1532,7 @@ function findNextNodeWithPredicateAfterSpecificNode(allNodes, startIdx, predFn, 
         return node
       end
     end
-    idx = inc(idx)
+    idx = idx + 1
     if idx >= maxIdx then
       keepSearching = false
     end
@@ -1549,7 +1549,7 @@ function findPrevNodeWithPredicate(allNodes, startIdx, predFn)
     if predFn(node) then
       return node
     end
-    idx = dec(idx)
+    idx = idx - 1
   end
   return null
 end
@@ -1574,7 +1574,7 @@ function areForwardNodesAlreadySlurped(nodes, idx)
       result = false
     end
 
-    idx = inc(idx)
+    idx = idx + 1
     -- stop searching if we are at the end of the nodes list
     if idx > nodesSize then
       keepSearching = false
@@ -1615,7 +1615,7 @@ function findForwardClosingParens(nodes, idx)
       keepSearching = false
     end
 
-    idx = inc(idx)
+    idx = idx + 1
 
     -- stop searching if we are at the end of the nodes list
     if idx > nodesSize then
@@ -1635,7 +1635,7 @@ function recordOriginalColIndexes(nodes, idx)
   local initialSpaces = 0
   if isNewlineNode(nodes[idx]) then
     initialSpaces = numSpacesAfterNewline(nodes[idx])
-    idx = inc(idx)
+    idx = idx + 1
   end
 
   local colIdx = initialSpaces
@@ -1655,10 +1655,10 @@ function recordOriginalColIndexes(nodes, idx)
         colIdx = colIdx + nodeTxtLength
       elseif isTagNode(node) then
         node._origColIdx = colIdx
-        colIdx = inc(colIdx)
+        colIdx = colIdx + 1
       end
     end
-    idx = inc(idx)
+    idx = idx + 1
     if idx > numNodes then
       keepSearching = false
     end
@@ -1697,7 +1697,7 @@ end
 -- Starting from idx, is the next line a line where there is only a comment and nothing else?
 local function isNextLineACommentLine(nodes, idx)
   local n1 = nodes[idx]
-  local n2 = nodes[inc(idx)]
+  local n2 = nodes[idx + 1]
   if n1 and n2 then
     return isCommentNode(n1) and isNewlineNode(n2)
   elseif n1 and not n2 then
@@ -1721,29 +1721,29 @@ local function numSpacesForIndentation(wrappingOpener)
       return directlyUnderneathOpener
     elseif nextNodeAfterOpener and isParenOpener(nextNodeAfterOpener) then
       if isMapLiteralOpener(wrappingOpener) then
-        return inc(openerColIdx)
+        return openerColIdx + 1
       elseif isVectorLiteralOpener(wrappingOpener) then
-        return inc(openerColIdx)
+        return openerColIdx + 1
       elseif isSingleParenOpener(wrappingOpener) then
-        return inc(openerColIdx)
+        return openerColIdx + 1
       elseif isSetLiteralOpener(wrappingOpener) then
-        return inc(inc(openerColIdx))
+        return openerColIdx + 2
       elseif isAnonFnOpener(wrappingOpener) then
-        return inc(inc(openerColIdx))
+        return openerColIdx + 2
       else
         error("Error inside numSpacesForIndentation function. This condition should be unreachable.")
       end
     elseif isMapLiteralOpener(wrappingOpener) then
-      return inc(openerColIdx)
+      return openerColIdx + 1
     elseif isVectorLiteralOpener(wrappingOpener) then
-      return inc(openerColIdx)
+      return openerColIdx + 1
     elseif isAnonFnOpener(wrappingOpener) then
       return openerColIdx + 3
     elseif isNamespacedMapOpener(wrappingOpener) then
       return openerColIdx + strLen(wrappingOpener.text)
     else
       -- else indent two spaces from the wrapping opener
-      return inc(inc(openerColIdx))
+      return openerColIdx + 2
     end
   end
 end
@@ -1836,7 +1836,7 @@ local function findNextTokenInsideRequireForm(nodes, idx)
       keepSearching = false
       result = node
     end
-    idx = inc(idx)
+    idx = idx + 1
     if idx >= numNodes then
       keepSearching = false
     end
@@ -1876,7 +1876,7 @@ local function sortNsResult(result, prefixListComments)
       if isArray(result.requireMacros[rmIdx + 1].refer) then
         table.sort(result.requireMacros[rmIdx + 1].refer, compareSymbolsThenPlatform)
       end
-      rmIdx = inc(rmIdx)
+      rmIdx = rmIdx + 1
     end
   end
 
@@ -1920,7 +1920,7 @@ local function sortNsResult(result, prefixListComments)
         table.sort(result.requires[requiresIdx].rename, compareFromSymbol)
       end
 
-      requiresIdx = inc(requiresIdx)
+      requiresIdx = requiresIdx + 1
     end
   end
 
@@ -1965,11 +1965,11 @@ local function sortNsResult(result, prefixListComments)
         local metadataItm = result.nsMetadata[idx]
         metadataObj[metadataItm.key] = metadataItm.value
         stackPush(metadataKeys, metadataItm.key)
-        idx = inc(idx)
+        idx = idx + 1
       end
 
       local newNsMetadata = {}
-      local reverseIdx = dec(arraySize(metadataKeys))
+      local reverseIdx = arraySize(metadataKeys) - 1
       while reverseIdx >= 0 do
         local key2 = metadataKeys[reverseIdx + 1]
 
@@ -1982,7 +1982,7 @@ local function sortNsResult(result, prefixListComments)
           stackPush(newNsMetadata, metadataItm2)
         end
 
-        reverseIdx = dec(reverseIdx)
+        reverseIdx = reverseIdx - 1
       end
 
       result.nsMetadata = arrayReverse(newNsMetadata)
@@ -2018,7 +2018,7 @@ local function lookForIgnoreFile(nodesArr)
     elseif isNsNode(node) then
       return false
     end
-    idx = inc(idx)
+    idx = idx + 1
     if idx > numNodes then
       keepSearching = false
     end
@@ -2126,7 +2126,7 @@ local function parseNs(nodesArr)
     local nodeHasNonBlankText = isNodeWithNonBlankText(node)
 
     if parenNestingDepth >= 1 and isTokenNode2 and nodeHasNonBlankText then
-      numSymbolsInsideList = inc(numSymbolsInsideList)
+      numSymbolsInsideList = numSymbolsInsideList + 1
     end
 
     if parenNestingDepth == 1 and isNsNode(node) and numSymbolsInsideList == 1 then
@@ -2168,7 +2168,7 @@ local function parseNs(nodesArr)
     end
 
     if isParenOpener(node) then
-      parenNestingDepth = inc(parenNestingDepth)
+      parenNestingDepth = parenNestingDepth + 1
       stackPush(parenStack, node)
 
       numSymbolsInsideList = 0
@@ -2190,7 +2190,7 @@ local function parseNs(nodesArr)
         end
       end
     elseif isParenCloser(node) then
-      parenNestingDepth = dec(parenNestingDepth)
+      parenNestingDepth = parenNestingDepth - 1
       stackPop(parenStack)
 
       -- We can assume there is only one ns form per file and exit the main
@@ -2247,14 +2247,14 @@ local function parseNs(nodesArr)
         insideRequireForm
         and insidePrefixList
         and prefixListParenNestingDepth ~= -1
-        and parenNestingDepth == dec(prefixListParenNestingDepth)
+        and parenNestingDepth == prefixListParenNestingDepth - 1
       then
         insidePrefixList = false
         prefixListPrefix = nil
         prefixListParenNestingDepth = -1
       end
 
-      if insideReaderConditional and parenNestingDepth == dec(readerConditionalParenNestingDepth) then
+      if insideReaderConditional and parenNestingDepth == (readerConditionalParenNestingDepth - 1) then
         insideReaderConditional = false
         currentReaderConditionalPlatform = nil
         readerConditionalParenNestingDepth = -1
@@ -2337,7 +2337,7 @@ local function parseNs(nodesArr)
         tmpMetadataKey = node.text
         nextTextNodeIsMetadataKey = false
         -- the next node should be a whitespace node, then collect the value for this key
-        local nextNonWhitespaceNode = findNextNonWhitespaceNode(nodesArr, inc(idx))
+        local nextNonWhitespaceNode = findNextNonWhitespaceNode(nodesArr, idx + 1)
         metadataValueNodeId = nextNonWhitespaceNode.id
       elseif node.id == metadataValueNodeId then
         local metadataObj = {}
@@ -2368,10 +2368,10 @@ local function parseNs(nodesArr)
       and nsSymbolIdx < 0
       and node.name == "meta"
     then
-      local markerNode = findNextNodeWithText(nodesArr, inc(idx))
+      local markerNode = findNextNodeWithText(nodesArr, (idx + 1))
       -- NOTE: this should always be true
       if markerNode.text == "^" then
-        local nodeAfterMarker = findNextNodeWithText(nodesArr, inc(inc(idx)))
+        local nodeAfterMarker = findNextNodeWithText(nodesArr, (idx + 2))
         if nodeAfterMarker and nodeAfterMarker.text == "{" then
           insideNsMetadataHashMap = true
         elseif nodeAfterMarker and isTokenNode(nodeAfterMarker) then
@@ -2507,7 +2507,7 @@ local function parseNs(nodesArr)
 
     -- collect :refer-clojure :exclude symbols
     elseif
-      idx > inc(referClojureNodeIdx)
+      idx > (referClojureNodeIdx + 1)
       and collectReferClojureExcludeSymbols
       and parenNestingDepth >= 3
       and isTokenNode2
@@ -2534,7 +2534,7 @@ local function parseNs(nodesArr)
 
     -- collect :refer-clojure :only symbols
     elseif
-      idx > inc(referClojureNodeIdx)
+      idx > (referClojureNodeIdx + 1)
       and collectReferClojureOnlySymbols
       and parenNestingDepth >= 3
       and isTokenNode2
@@ -2563,7 +2563,7 @@ local function parseNs(nodesArr)
 
     -- collect :refer-clojure :rename symbols
     elseif
-      idx > inc(referClojureNodeIdx)
+      idx > (referClojureNodeIdx + 1)
       and collectReferClojureRenameSymbols
       and parenNestingDepth >= 3
       and isTokenNode2
@@ -2697,7 +2697,7 @@ local function parseNs(nodesArr)
       if activeRequireMacrosIdx < 0 then
         activeRequireMacrosIdx = 1
       else
-        activeRequireMacrosIdx = inc(activeRequireMacrosIdx)
+        activeRequireMacrosIdx = activeRequireMacrosIdx + 1
       end
       requireMacrosLineNo = lineNo
 
@@ -2724,7 +2724,7 @@ local function parseNs(nodesArr)
     elseif
       idx > referMacrosIdx
       and insideRequireForm
-      and parenNestingDepth == inc(referMacrosParenNestingDepth)
+      and parenNestingDepth == referMacrosParenNestingDepth + 1
       and isTokenNode2
       and isTextNode
     then
@@ -2763,7 +2763,7 @@ local function parseNs(nodesArr)
 
     -- :require :as-alias
     elseif idx > requireNodeIdx and insideRequireForm and isTokenNode2 and isAsAliasKeyword(node) then
-      local nextSymbol = findNextTokenInsideRequireForm(nodesArr, inc(idx))
+      local nextSymbol = findNextTokenInsideRequireForm(nodesArr, idx + 1)
       result.requires[activeRequireIdx].asAlias = nextSymbol.text
 
     -- collect :refer :all
@@ -2848,7 +2848,7 @@ local function parseNs(nodesArr)
       if activeRequireIdx < 0 then
         activeRequireIdx = 1
       else
-        activeRequireIdx = inc(activeRequireIdx)
+        activeRequireIdx = activeRequireIdx + 1
       end
       requireFormLineNo = lineNo
 
@@ -2879,7 +2879,7 @@ local function parseNs(nodesArr)
       if activeRequireIdx < 0 then
         activeRequireIdx = 1
       else
-        activeRequireIdx = inc(activeRequireIdx)
+        activeRequireIdx = activeRequireIdx + 1
       end
       requireSymbolIdx = idx
       requireFormLineNo = lineNo
@@ -2908,7 +2908,7 @@ local function parseNs(nodesArr)
       -- - require symbol followed by :as
       -- - require symbol followed by :refer
 
-      local nextTokenInsideRequireForm = findNextTokenInsideRequireForm(nodesArr, inc(idx))
+      local nextTokenInsideRequireForm = findNextTokenInsideRequireForm(nodesArr, idx + 1)
       local isPrefixList = nextTokenInsideRequireForm and not isKeywordNode(nextTokenInsideRequireForm)
 
       if isPrefixList then
@@ -2936,7 +2936,7 @@ local function parseNs(nodesArr)
         if activeRequireIdx < 0 then
           activeRequireIdx = 1
         else
-          activeRequireIdx = inc(activeRequireIdx)
+          activeRequireIdx = activeRequireIdx + 1
         end
         requireSymbolIdx = idx
         requireFormLineNo = lineNo
@@ -2966,7 +2966,7 @@ local function parseNs(nodesArr)
       if activeRequireIdx < 0 then
         activeRequireIdx = 1
       else
-        activeRequireIdx = inc(activeRequireIdx)
+        activeRequireIdx = activeRequireIdx + 1
       end
       requireFormLineNo = lineNo
 
@@ -3149,19 +3149,19 @@ local function parseNs(nodesArr)
     -- NOTE: this lineNo variable does not account for newlines inside of multi-line strings
     -- but we can ignore that for the purposes of ns parsing here
     if currentNodeIsNewline then
-      lineNo = inc(lineNo)
+      lineNo = lineNo + 1
     end
     prevNodeIsNewline = currentNodeIsNewline
 
     -- increment to look at the next node
-    idx = inc(idx)
+    idx = idx + 1
 
     -- exit if we are at the end of the nodes
     if idx > numNodes then
       continueParsingNsForm = false
 
     -- exit if we have finished parsing the ns form
-    elseif nsNodeIdx > 0 and not insideNsForm and lineNo >= inc(inc(nsFormEndsLineIdx)) then
+    elseif nsNodeIdx > 0 and not insideNsForm and lineNo >= (nsFormEndsLineIdx + 2) then
       continueParsingNsForm = false
     end
   end -- end main ns parsing parsing node loop
@@ -3181,7 +3181,7 @@ local function printCommentsAbove(outTxt, commentsAbove, indentationStr)
     while idx <= numCommentLines do
       local commentLine = strConcat(indentationStr, commentsAbove[idx])
       outTxt = strConcat3(outTxt, commentLine, "\n")
-      idx = inc(idx)
+      idx = idx + 1
     end
   end
   return outTxt
@@ -3202,7 +3202,7 @@ local function getPlatformsFromArray(arr)
         platforms[itm.platform] = true
       end
     end
-    idx = inc(idx)
+    idx = idx + 1
   end
 
   local platformsArr = {}
@@ -3240,7 +3240,7 @@ local function onlyOneRequirePerPlatform(reqs)
         end
       end
     end
-    idx = inc(idx)
+    idx = idx + 1
     if idx > numReqs then
       keepSearching = false
     end
@@ -3260,7 +3260,7 @@ function filterOnPlatform(arr, platform)
     elseif isString(itm.platform) and itm.platform == platform then
       stackPush(filteredReqs, arr[idx + 1])
     end
-    idx = inc(idx)
+    idx = idx + 1
   end
   return filteredReqs
 end
@@ -3413,10 +3413,10 @@ function formatRenamesList(itms)
     s = strConcat(s, itms[idx + 1].fromSymbol)
     s = strConcat(s, " ")
     s = strConcat(s, itms[idx + 1].toSymbol)
-    if inc(idx) < numItms then
+    if idx + 1 < numItms then
       s = strConcat(s, ", ")
     end
-    idx = inc(idx)
+    idx = idx + 1
   end
   return s
 end
@@ -3457,7 +3457,7 @@ local function formatReferClojureSingleKeyword(ns, excludeOrOnly)
       local platform = platforms[platformIdx + 1]
       local symbolsForPlatform = arrayPluck(filterOnPlatform(symbolsArr, platform), "symbol")
       s = strConcat(s, formatKeywordFollowedByListOfSymbols(platform, symbolsForPlatform))
-      if inc(platformIdx) ~= numPlatforms then
+      if platformIdx + 1 ~= numPlatforms then
         if kwd == ":exclude" then
           s = strConcat3(s, "\n", repeatString(" ", 17))
         elseif kwd == ":only" then
@@ -3466,7 +3466,7 @@ local function formatReferClojureSingleKeyword(ns, excludeOrOnly)
           -- FIXME: throw error here?
         end
       end
-      platformIdx = inc(platformIdx)
+      platformIdx = platformIdx + 1
     end
     s = strConcat(s, "))")
     return s
@@ -3491,14 +3491,14 @@ local function formatReferClojureSingleKeyword(ns, excludeOrOnly)
       local platform = platforms[platformIdx + 1]
       local symbolsForPlatform = arrayPluck(filterOnPlatform(symbolsArr, platform), "symbol")
       s = strConcat(s, formatKeywordFollowedByListOfSymbols(platform, symbolsForPlatform))
-      if inc(platformIdx) ~= numPlatforms then
+      if platformIdx + 1 ~= numPlatforms then
         if kwd == ":exclude" then
           s = strConcat3(s, "\n", repeatString(" ", 18))
         elseif kwd == ":only" then
           s = strConcat3(s, "\n", repeatString(" ", 15))
         end
       end
-      platformIdx = inc(platformIdx)
+      platformIdx = platformIdx + 1
     end
     s = strConcat(s, ")])")
     return s
@@ -3561,7 +3561,7 @@ local function formatReferClojure(ns)
         s = strConcat(s, formatRenamesList(platformRenames))
         s = strConcat(s, "]")
 
-        platformIdx = inc(platformIdx)
+        platformIdx = platformIdx + 1
       end
 
       s = strConcat(s, ")})")
@@ -3644,7 +3644,7 @@ local function formatNs(ns)
         local metadataItm = ns.nsMetadata[metadataItmsIdx + 1] -- Lua arrays are 1-based
         outTxt = strConcat3(outTxt, metadataItm.key, " ")
         outTxt = strConcat(outTxt, metadataItm.value)
-        metadataItmsIdx = inc(metadataItmsIdx)
+        metadataItmsIdx = metadataItmsIdx + 1
         if metadataItmsIdx ~= numMetadataItms then
           outTxt = strConcat(outTxt, "\n   ")
         end
@@ -3688,7 +3688,7 @@ local function formatNs(ns)
     local rmIdx = 0
     while rmIdx < numRequireMacros do
       local rm = ns.requireMacros[rmIdx + 1] -- Lua arrays are 1-based
-      local isLastRequireMacroLine = inc(rmIdx) == numRequireMacros
+      local isLastRequireMacroLine = (rmIdx + 1) == numRequireMacros
       outTxt = strConcat(outTxt, formatRequireLine(rm, rmIndentation))
       if isStringWithChars(rm.commentAfter) then
         if isLastRequireMacroLine then
@@ -3700,7 +3700,7 @@ local function formatNs(ns)
       if not isLastRequireMacroLine then
         outTxt = strConcat(outTxt, "\n")
       end
-      rmIdx = inc(rmIdx)
+      rmIdx = rmIdx + 1
     end
 
     if not requireMacrosIsLastMainForm and not wrapRequireMacrosWithReaderConditional then
@@ -3764,7 +3764,7 @@ local function formatNs(ns)
     while requiresIdx < numRequires do
       local req = ns.requires[requiresIdx + 1] -- Lua arrays are 1-based
       -- NOTE: I am not sure this works correctly with reader conditionals
-      local isLastRequire1 = inc(requiresIdx) == numRequires
+      local isLastRequire1 = (requiresIdx + 1) == numRequires
 
       if not req.platform or allRequiresUnderOnePlatform then
         outTxt = strConcat(outTxt, formatRequireLine(req, requireLineIndentation))
@@ -3788,7 +3788,7 @@ local function formatNs(ns)
         end
       end
 
-      requiresIdx = inc(requiresIdx)
+      requiresIdx = requiresIdx + 1
     end
 
     local platformIdx = 0
@@ -3818,13 +3818,13 @@ local function formatNs(ns)
 
           -- FIXME: need to add commentsBefore and commentsAfter here
 
-          platformIdx = inc(platformIdx)
+          platformIdx = platformIdx + 1
         end
         -- use splicing reader conditional #?@(
       else
         while platformIdx < numPlatforms do
           local platform = reqPlatforms[platformIdx + 1]
-          local isLastPlatform = inc(platformIdx) == numPlatforms
+          local isLastPlatform = (platformIdx + 1) == numPlatforms
 
           if platformIdx == 0 then
             outTxt = strTrim(outTxt)
@@ -3843,7 +3843,7 @@ local function formatNs(ns)
           local reqIdx2 = 0
           while reqIdx2 < numFilteredReqs do
             local req = platformRequires[reqIdx2 + 1]
-            local isLastRequireForThisPlatform = inc(reqIdx2) == numFilteredReqs
+            local isLastRequireForThisPlatform = (reqIdx2 + 1) == numFilteredReqs
 
             if printedFirstReqLine then
               outTxt = strConcat(outTxt, formatRequireLine(req, "        "))
@@ -3870,14 +3870,14 @@ local function formatNs(ns)
               outTxt = strConcat(outTxt, "\n")
             end
 
-            reqIdx2 = inc(reqIdx2)
+            reqIdx2 = reqIdx2 + 1
           end
 
           if printPlatformClosingBracket then
             outTxt = strConcat(outTxt, "]")
           end
 
-          platformIdx = inc(platformIdx)
+          platformIdx = platformIdx + 1
         end
       end
     end
@@ -3927,7 +3927,7 @@ local function formatNs(ns)
       end
 
       local imp = nonPlatformSpecificImports[importsIdx + 1]
-      local isLastImport = inc(importsIdx) == numNonPlatformSpecificImports
+      local isLastImport = (importsIdx + 1) == numNonPlatformSpecificImports
 
       outTxt = strConcat3(outTxt, "   (", imp.package)
 
@@ -3937,7 +3937,7 @@ local function formatNs(ns)
         local className = imp.classes[classNameIdx + 1]
         outTxt = strConcat3(outTxt, " ", className)
 
-        classNameIdx = inc(classNameIdx)
+        classNameIdx = classNameIdx + 1
       end
 
       outTxt = strConcat(outTxt, ")")
@@ -3950,7 +3950,7 @@ local function formatNs(ns)
         outTxt = strConcat(outTxt, "\n")
       end
 
-      importsIdx = inc(importsIdx)
+      importsIdx = importsIdx + 1
     end
 
     local platformIdx = 0
@@ -3986,7 +3986,7 @@ local function formatNs(ns)
       local numImports2 = arraySize(importsForThisPlatform)
       while idx2 < numImports2 do
         local imp = importsForThisPlatform[idx2 + 1]
-        local isLastImport2 = inc(idx2) == numImports2
+        local isLastImport2 = (idx2 + 1) == numImports2
 
         outTxt = strConcat(outTxt, "(")
         outTxt = strConcat(outTxt, imp.package)
@@ -4012,10 +4012,10 @@ local function formatNs(ns)
           end
         end
 
-        idx2 = inc(idx2)
+        idx2 = idx2 + 1
       end
 
-      platformIdx = inc(platformIdx)
+      platformIdx = platformIdx + 1
     end
 
     local closeImportParenTrail = ")"
@@ -4055,7 +4055,7 @@ local function formatNs(ns)
       if isStringWithChars(ns.genClass.commentAfter) then
         outTxt = strConcat3(outTxt, " ", ns.genClass.commentAfter)
       end
-      local genClassValueIndentationLevel = inc(genClassIndentationLevel)
+      local genClassValueIndentationLevel = genClassIndentationLevel + 1
       local indentationStr2 = repeatString(" ", genClassValueIndentationLevel)
 
       -- print the :gen-class keys in the order in which they appear in the clojure.core.genclass documentation
@@ -4098,7 +4098,7 @@ local function formatNs(ns)
             commentAfterGenClass = genClassValue.commentAfter
           end
         end
-        idx3 = inc(idx3)
+        idx3 = idx3 + 1
       end
     end
     if not isGenClassBehindReaderConditional and not commentAfterGenClass then
@@ -4188,7 +4188,7 @@ local function formatNodes(nodesArr, parsedNs)
         nsStartStringIdx = strLen(strConcat(outTxt, lineTxt))
       end
 
-      local nextTextNode = findNextNodeWithText(nodesArr, inc(idx))
+      local nextTextNode = findNextNodeWithText(nodesArr, idx + 1)
       local isLastNode = idx == numNodes
 
       local currentNodeIsWhitespace = isWhitespaceNode(node)
@@ -4210,7 +4210,7 @@ local function formatNodes(nodesArr, parsedNs)
 
         if isDiscardNode(prevNode1) or (isWhitespaceNode(prevNode1) and isDiscardNode(prevNode2)) then
           -- look forward to find the next node with text
-          local nextIgnoreNode = findNextNonWhitespaceNode(nodesArr, inc(idx))
+          local nextIgnoreNode = findNextNonWhitespaceNode(nodesArr, idx + 1)
 
           -- if parens or brackets or something with children, then find the closing node id
           if isArray(nextIgnoreNode.children) and arraySize(nextIgnoreNode.children) > 0 then
@@ -4220,7 +4220,7 @@ local function formatNodes(nodesArr, parsedNs)
 
           -- if a node without children, then just don't format it
           else
-            local nextImmediateNode = nodesArr[inc(idx)]
+            local nextImmediateNode = nodesArr[(idx + 1)]
             ignoreNodesStartId = nextImmediateNode.id
             ignoreNodesEndId = nextIgnoreNode.id
           end
@@ -4261,7 +4261,7 @@ local function formatNodes(nodesArr, parsedNs)
           end
         end
 
-        parenNestingDepth = inc(parenNestingDepth)
+        parenNestingDepth = parenNestingDepth + 1
 
         -- attach some extra information to this node and push it onto the parenStack
         local parenStackNode = node
@@ -4284,7 +4284,7 @@ local function formatNodes(nodesArr, parsedNs)
         end
       elseif isParenCloser(node) then
         -- NOTE: this code is duplicated when we look forward to close parenTrails
-        parenNestingDepth = dec(parenNestingDepth)
+        parenNestingDepth = parenNestingDepth - 1
         stackPop(parenStack)
 
         -- flag the end of the ns form
@@ -4337,7 +4337,7 @@ local function formatNodes(nodesArr, parsedNs)
 
         if lookForwardToSlurpNodes then
           -- look forward and grab any closers nodes that may be slurped up
-          local parenTrailClosers = findForwardClosingParens(nodesArr, inc(idx))
+          local parenTrailClosers = findForwardClosingParens(nodesArr, idx + 1)
 
           -- If we have printed a whitespace node just before this, we may need to remove it and then re-print
           local lastNodeWePrinted = arrayLast(nodesWeHavePrintedOnThisLine)
@@ -4361,11 +4361,11 @@ local function formatNodes(nodesArr, parsedNs)
               parenTrailCloserNode.text = ""
               parenTrailCloserNode._wasSlurpedUp = true
 
-              parenNestingDepth = dec(parenNestingDepth)
+              parenNestingDepth = parenNestingDepth - 1
               stackPop(parenStack)
             end
 
-            parenTrailCloserIdx = inc(parenTrailCloserIdx)
+            parenTrailCloserIdx = parenTrailCloserIdx + 1
           end
 
           -- re-print the whitespace node if necessary
@@ -4382,9 +4382,9 @@ local function formatNodes(nodesArr, parsedNs)
         local numSpacesOnNextLine = numSpacesAfterNewline(node)
 
         -- Have we already slurped up everything on the next line?
-        local allNextLineNodesWereSlurpedUp = areForwardNodesAlreadySlurped(nodesArr, inc(idx))
+        local allNextLineNodesWereSlurpedUp = areForwardNodesAlreadySlurped(nodesArr, idx + 1)
 
-        local nextLineContainsOnlyOneComment = isNextLineACommentLine(nodesArr, inc(idx))
+        local nextLineContainsOnlyOneComment = isNextLineACommentLine(nodesArr, idx + 1)
         local nextLineCommentColIdx = -1
         if nextLineContainsOnlyOneComment then
           nextLineCommentColIdx = numSpacesOnNextLine
@@ -4438,7 +4438,7 @@ local function formatNodes(nodesArr, parsedNs)
                   end
                 end
 
-                openingLineNodeIdx = inc(openingLineNodeIdx)
+                openingLineNodeIdx = openingLineNodeIdx + 1
                 if openingLineNodeIdx > numOpeningLineNodes then
                   searchForAlignmentNode = false
                 end
@@ -4460,7 +4460,7 @@ local function formatNodes(nodesArr, parsedNs)
               local prevLineNode = nodesWeHavePrintedOnThisLine[idx2]
               local prevNode2 = nil
               if idx2 > 1 then
-                prevNode2 = nodesWeHavePrintedOnThisLine[dec(idx2)]
+                prevNode2 = nodesWeHavePrintedOnThisLine[(idx2 - 1)]
               end
               local isPossibleAlignmentNode = false
               if isNodeWithNonBlankText(prevLineNode) then
@@ -4471,9 +4471,9 @@ local function formatNodes(nodesArr, parsedNs)
               if isPossibleAlignmentNode and nextLineCommentColIdx == prevLineNode._origColIdx then
                 colIdxOfSingleLineCommentAlignmentNode = prevLineNode._printedColIdx
                 commentLooksAlignedWithPreviousForm = true
-                idx2 = inc(numPrevLineNodes) -- exit the loop
+                idx2 = numPrevLineNodes + 1 -- exit the loop
               end
-              idx2 = inc(idx2)
+              idx2 = idx2 + 1
             end
           end
 
@@ -4523,9 +4523,9 @@ local function formatNodes(nodesArr, parsedNs)
           colIdx = strLen(indentationStr)
 
           -- increment the lineIdx
-          lineIdx = inc(lineIdx)
+          lineIdx = lineIdx + 1
           if isDoubleNewline then
-            lineIdx = inc(lineIdx)
+            lineIdx = lineIdx + 1
           end
         end
 
@@ -4593,7 +4593,7 @@ local function formatNodes(nodesArr, parsedNs)
       end
     end -- end !insideTheIgnoreZone
 
-    idx = inc(idx)
+    idx = idx + 1
   end -- end looping through the nodes
 
   -- add the last line to outTxt if necessary
@@ -4620,7 +4620,7 @@ local function formatNodes(nodesArr, parsedNs)
 
     local tailStr = ""
     if nsEndStringIdx > 0 then
-      tailStr = substr(outTxt, inc(inc(nsEndStringIdx)), -1)
+      tailStr = substr(outTxt, (nsEndStringIdx + 2), -1)
     end
 
     outTxt = strConcat3(headStr, nsStr, tailStr)
