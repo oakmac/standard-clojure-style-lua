@@ -578,7 +578,7 @@ local function NotChar(opts)
 end
 
 -- Terminal parser that matches a String
-local function String_old(opts)
+local function String(opts)
   return {
     name = opts.name,
     parse = function(txt, pos)
