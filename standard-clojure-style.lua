@@ -980,6 +980,20 @@ function getParser(p)
   return nil
 end
 
+
+
+-- after all parsers are defined, resolve string refs:
+for k, v in pairs(parsers) do
+  if v.parsers then
+    for i, p in ipairs(v.parsers) do
+      if type(p) == "string" then
+        v.parsers[i] = parsers[p]
+      end
+    end
+  end
+end
+
+
 -- -----------------------------------------------------------------------------
 -- Parser Definitions
 
@@ -3261,7 +3275,7 @@ function filterOnPlatform(arr, platform)
   return filteredReqs
 end
 
-function formatRequireLine(req, initialIndentation)
+function formatRequireLine_portable(req, initialIndentation)
   local outTxt = ""
   outTxt = printCommentsAbove(outTxt, req.commentsAbove, initialIndentation)
   outTxt = strConcat(outTxt, initialIndentation)
@@ -3310,6 +3324,74 @@ function formatRequireLine(req, initialIndentation)
   outTxt = strConcat(outTxt, "]")
   return outTxt
 end
+
+
+
+function formatRequireLine(req, initialIndentation)
+  local parts = {}
+
+  -- We pass an empty string to printCommentsAbove so it just returns the formatted comments
+  table.insert(parts, printCommentsAbove("", req.commentsAbove, initialIndentation))
+
+  table.insert(parts, initialIndentation)
+  table.insert(parts, "[")
+  table.insert(parts, req.symbol)
+
+  if isString(req.as) and req.as ~= "" then
+    table.insert(parts, " :as ")
+    table.insert(parts, req.as)
+  elseif isString(req.asAlias) and req.asAlias ~= "" then
+    table.insert(parts, " :as-alias ")
+    table.insert(parts, req.asAlias)
+  end
+
+  if isString(req.default) and req.default ~= "" then
+    table.insert(parts, " :default ")
+    table.insert(parts, req.default)
+  end
+
+  -- NOTE: this will not work if the individual :refer symbols are wrapped in a reader conditional
+  if isArray(req.refer) and arraySize(req.refer) > 0 then
+    table.insert(parts, " :refer [")
+    local referSymbols = arrayPluck(req.refer, "symbol")
+    table.insert(parts, strJoin(referSymbols, " "))
+    table.insert(parts, "]")
+  elseif req.refer == "all" then
+    table.insert(parts, " :refer :all")
+  end
+
+  -- NOTE: this will not work if the individual :exclude symbols are wrapped in a reader conditional
+  if isArray(req.exclude) and arraySize(req.exclude) > 0 then
+    table.insert(parts, " :exclude [")
+    local excludeSymbols = arrayPluck(req.exclude, "symbol")
+    table.insert(parts, strJoin(excludeSymbols, " "))
+    table.insert(parts, "]")
+  end
+
+  if req.includeMacros == true then
+    table.insert(parts, " :include-macros true")
+  elseif req.includeMacros == false then
+    table.insert(parts, " :include-macros false")
+  end
+
+  if isArray(req.referMacros) and arraySize(req.referMacros) > 0 then
+    table.insert(parts, " :refer-macros [")
+    table.insert(parts, strJoin(req.referMacros, " "))
+    table.insert(parts, "]")
+  end
+
+  if isArray(req.rename) and arraySize(req.rename) > 0 then
+    table.insert(parts, " :rename {")
+    table.insert(parts, formatRenamesList(req.rename))
+    table.insert(parts, "}")
+  end
+
+  table.insert(parts, "]")
+
+  -- Combine all parts into a single string efficiently
+  return table.concat(parts)
+end
+
 
 -- returns an array of the available :refer-clojure keys
 -- valid options are: :exclude, :only, :rename

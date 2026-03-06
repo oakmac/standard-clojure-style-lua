@@ -23,6 +23,14 @@ lua tests.lua
 [lua]:https://lua.org/
 [StyLua]:https://github.com/JohnnyMorganz/StyLua
 
+## TODO
+
+- [ ] merge the changes that fix multibyte strings (utf8-aware string functions)
+- [ ] add the profiler code
+  - profiling recommendations https://claude.ai/chat/32f22525-71ad-4311-ad4e-27417618c7d2
+  - string concatenation --> table.concat
+  - resolve getParser once instead of every time
+
 ## License
 
 [ISC License](LICENSE.md)
