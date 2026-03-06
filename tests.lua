@@ -374,6 +374,73 @@ function TestStringUtil:testCrlfToLf()
   lu.assertEquals(scsLib._crlfToLf("\r\n"), "\n")
 end
 
+-- Unicode / multi-byte UTF-8 test cases for String Util functions
+-- These tests ensure that charAt, substr, and strLen operate on
+-- characters (Unicode code points), not raw bytes.
+--
+-- NOTE: Lua uses 1-based indexing, so all indices are shifted +1
+-- compared to the equivalent JS tests.
+
+TestStringUtilUnicode = {}
+
+function TestStringUtilUnicode:testStrLen()
+  -- strLen should count characters, not bytes
+  lu.assertEquals(scsLib._strLen("levels-σ"), 8) -- σ is 2 bytes
+  lu.assertEquals(scsLib._strLen("σ"), 1)
+  lu.assertEquals(scsLib._strLen("αβγ"), 3) -- 3 chars, 6 bytes
+  lu.assertEquals(scsLib._strLen("hello"), 5) -- ASCII baseline
+  lu.assertEquals(scsLib._strLen(""), 0)
+end
+
+function TestStringUtilUnicode:testStrLenCJK()
+  -- 3-byte characters (CJK)
+  lu.assertEquals(scsLib._strLen("日本語"), 3) -- 3 chars, 9 bytes
+  lu.assertEquals(scsLib._strLen("a日b"), 3)
+end
+
+function TestStringUtilUnicode:testCharAtMultiByte()
+  -- 1-indexed in Lua
+  lu.assertEquals(scsLib._charAt("levels-σ", 1), "l")
+  lu.assertEquals(scsLib._charAt("levels-σ", 7), "-")
+  lu.assertEquals(scsLib._charAt("levels-σ", 8), "σ")
+end
+
+function TestStringUtilUnicode:testCharAtMultiByteOutOfBounds()
+  lu.assertEquals(scsLib._charAt("levels-σ", 9), "")
+end
+
+function TestStringUtilUnicode:testCharAtMultiByteMiddle()
+  lu.assertEquals(scsLib._charAt("aσb", 1), "a")
+  lu.assertEquals(scsLib._charAt("aσb", 2), "σ")
+  lu.assertEquals(scsLib._charAt("aσb", 3), "b")
+  lu.assertEquals(scsLib._charAt("aσb", 4), "")
+end
+
+function TestStringUtilUnicode:testCharAtCJK()
+  lu.assertEquals(scsLib._charAt("日本語", 1), "日")
+  lu.assertEquals(scsLib._charAt("日本語", 2), "本")
+  lu.assertEquals(scsLib._charAt("日本語", 3), "語")
+end
+
+function TestStringUtilUnicode:testSubstrMultiByte()
+  -- substr(s, startIdx, endIdx) — endIdx is exclusive, 1-indexed in Lua
+  lu.assertEquals(scsLib._substr("levels-σ", 1, 9), "levels-σ")
+  lu.assertEquals(scsLib._substr("levels-σ", 8, 9), "σ")
+  lu.assertEquals(scsLib._substr("levels-σ", 7, 9), "-σ")
+  lu.assertEquals(scsLib._substr("levels-σ", 1, 8), "levels-")
+end
+
+function TestStringUtilUnicode:testSubstrMultiByteNegativeEnd()
+  lu.assertEquals(scsLib._substr("levels-σ", 1, -1), "levels-σ")
+  lu.assertEquals(scsLib._substr("levels-σ", 8, -1), "σ")
+end
+
+function TestStringUtilUnicode:testSubstrMultiByteMiddle()
+  lu.assertEquals(scsLib._substr("aσb", 1, 4), "aσb")
+  lu.assertEquals(scsLib._substr("aσb", 2, 3), "σ")
+  lu.assertEquals(scsLib._substr("aσb", 2, 4), "σb")
+end
+
 -- Test class
 TestStackOperations = {}
 

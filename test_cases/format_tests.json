@@ -515,6 +515,11 @@
     "expected": "#{#:xyz{#:aaa{:a \"a\"\n              :b \"b\"}}\n  :ccc\n  :ddd}"
   },
   {
+    "name": "multi-byte symbols",
+    "input": "(let [price-at-σ (fn [b]\n                   (round-price-to-α (* dynamic-multipler b)))\n\n      levels-σ [{:key \"010\" :mult 0.1}\n                {:key \"020\" :mult 0.2}\n                {:key \"030\" :mult 0.3}]]\n  nil)",
+    "expected": "(let [price-at-σ (fn [b]\n                   (round-price-to-α (* dynamic-multipler b)))\n\n      levels-σ [{:key \"010\" :mult 0.1}\n                {:key \"020\" :mult 0.2}\n                {:key \"030\" :mult 0.3}]]\n  nil)"
+  },
+  {
     "name": "Simple namespace",
     "input": "(ns aaa)",
     "expected": "(ns aaa)"
