@@ -76,11 +76,6 @@ end
 -- -----------------------------------------------------------------------------
 -- Language Helpers
 
--- returns the length of a String
-local function strLen(s)
-  return #s
-end
-
 -- returns the length of an Array
 local function arraySize(a)
   return #a
@@ -186,30 +181,184 @@ local function stackPush(s, itm)
   return nil
 end
 
--- -----------------------------------------------------------------------------
--- String Utils
+-- ---------------------------------------------------------------------------
+-- ASCII vs UTF8 multibyte-aware String Functions
+--
+-- This is a Lua-specific optimization.
+-- If the file contains only ASCII characters (which should be 99% of Clojure programs),
+-- then use the fast ASCII String methods.
+-- Otherwise, we need to use the utf8 byte-aware versions, which are noticeably slower
 
-local function charAt(s, n)
-  if n < 0 then
+-- Check if the utf8 library is available (Lua 5.3+)
+-- NOTE: this library will still work if this is false, but it is much faster with the utf8 library
+local env_has_utf8_lib = (utf8 ~= nil) and (utf8.len ~= nil)
+
+-- stateful - this gets toggled when we originally parse the file
+local file_contains_multibyte_chars = true
+
+local function str_contains_multibyte_chars(s)
+  return s:find("[\128-\255]") ~= nil
+end
+
+local function strLenASCII(s)
+  return #s
+end
+
+local function charAtASCII(s, n)
+  if n < 1 then
     return ""
   end
   return string.sub(s, n, n)
 end
 
+local function substrASCII(s, startIdx, endIdx)
+  if startIdx < 1 then
+    return ""
+  end
+  if startIdx == endIdx then
+    return ""
+  end
+  if endIdx < 0 then
+    return string.sub(s, startIdx)
+  end
+  return string.sub(s, startIdx, endIdx - 1)
+end
+
+-- UTF-8 helper: returns the byte offset where the nth character starts.
+-- Returns nil if the index is out of range.
+local function utf8ByteOffset(s, charIdx)
+  if charIdx < 1 then
+    return nil
+  end
+  if env_has_utf8_lib then
+    local ok, result = pcall(utf8.offset, s, charIdx)
+    if ok and result and result <= #s then
+      return result
+    end
+    return nil
+  end
+
+  -- Manual: skip (charIdx - 1) characters by stepping over continuation bytes
+  local bytePos = 1
+  for _ = 1, charIdx - 1 do
+    if bytePos > #s then
+      return nil
+    end
+    local b = s:byte(bytePos)
+    if not b then
+      return nil
+    end
+    if b < 0x80 then
+      bytePos = bytePos + 1
+    elseif b < 0xE0 then
+      bytePos = bytePos + 2
+    elseif b < 0xF0 then
+      bytePos = bytePos + 3
+    else
+      bytePos = bytePos + 4
+    end
+  end
+  if bytePos > #s then
+    return nil
+  end
+  return bytePos
+end
+
+-- Returns the number of bytes in the UTF-8 character starting at byte position bytePos.
+local function utf8CharBytes(s, bytePos)
+  local b = s:byte(bytePos)
+  if b < 0x80 then
+    return 1
+  elseif b < 0xE0 then
+    return 2
+  elseif b < 0xF0 then
+    return 3
+  else
+    return 4
+  end
+end
+
+-- Returns the number of Unicode characters in a string, not the number of bytes.
+-- This distinction matters for multi-byte UTF-8 characters (e.g. "σ" is 1 character
+-- but 2 bytes). Uses the built-in utf8 library when available, otherwise falls back
+-- to counting non-continuation bytes (bytes outside the 0x80-0xBF range).
+local function strLenUTF8(s)
+  if env_has_utf8_lib then
+    return utf8.len(s)
+  end
+
+  local _, count = s:gsub("[^\128-\191]", "")
+  return count
+end
+
+-- Returns the single UTF-8 character at character index charIdx (1-based).
+-- Returns "" for out of bounds or invalid indices (matching the original contract).
+local function charAtUTF8(s, charIdx)
+  if charIdx < 1 then
+    return ""
+  end
+  local bytePos = utf8ByteOffset(s, charIdx)
+  if not bytePos or bytePos > #s then
+    return ""
+  end
+  local len = utf8CharBytes(s, bytePos)
+  return s:sub(bytePos, bytePos + len - 1)
+end
+
 -- Returns the substring of s beginning at startIdx inclusive, and ending
--- at endIdx exclusive.
--- Pass -1 to endIdx to mean "until the end of the string"
-local function substr(s, startIdx, endIdx)
+-- at endIdx exclusive (both 1-based character indices).
+-- Pass -1 to endIdx to mean "until the end of the string".
+local function substrUTF8(s, startIdx, endIdx)
+  if startIdx < 1 then
+    return ""
+  end
   if startIdx == endIdx then
     return ""
   end
 
-  if endIdx < 0 then
-    local len = strLen(s)
-    endIdx = len + 1
+  local startByte = utf8ByteOffset(s, startIdx)
+  if not startByte then
+    return ""
   end
-  return string.sub(s, startIdx, endIdx - 1)
+
+  if endIdx < 0 then
+    return s:sub(startByte)
+  end
+
+  -- endIdx is exclusive, so the last character we want is at (endIdx - 1)
+  local lastCharIdx = endIdx - 1
+  if lastCharIdx < startIdx then
+    return ""
+  end
+  local endByteStart = utf8ByteOffset(s, lastCharIdx)
+  if not endByteStart then
+    -- endIdx is beyond the string length: return from startIdx to end
+    return s:sub(startByte)
+  end
+  local endByte = endByteStart + utf8CharBytes(s, endByteStart) - 1
+  return s:sub(startByte, endByte)
 end
+
+local strLen = strLenUTF8
+local charAt = charAtUTF8
+local substr = substrUTF8
+
+-- FIXME: rename this
+-- add comment explaining what this is and why it exists
+local function set_appropriate_string_fns(txt)
+  if str_contains_multibyte_chars(txt) then
+    strLen = strLenUTF8
+    charAt = charAtUTF8
+    substr = substrUTF8
+  else
+    strLen = strLenASCII
+    charAt = charAtASCII
+    substr = substrASCII
+  end
+end
+
+-- -----------------------------------------------------------------------------
+-- String Utils
 
 local function repeatString(text, n)
   local result = ""
@@ -4420,6 +4569,8 @@ end
 -- Parses inputTxt (Clojure code) and returns a String of it formatted according
 -- to Standard Clojure Style.
 local function format(inputTxt)
+  set_appropriate_string_fns(inputTxt)
+
   -- replace any CRLF with LF before we do anything
   inputTxt = crlfToLf(inputTxt)
 
@@ -4450,6 +4601,7 @@ local function format(inputTxt)
 end
 
 function parse(inputTxt)
+  set_appropriate_string_fns(inputTxt)
   return getParser("source").parse(inputTxt, 1)
 end
 
@@ -4462,6 +4614,7 @@ M.parseNs = parseNs
 
 -- Export internal functions for testing purposes
 
+M._strLen = strLen
 M._charAt = charAt
 M._crlfToLf = crlfToLf
 M._isStringWithChars = isStringWithChars

@@ -630,6 +630,11 @@
     "expected": "(source 0..9\n  (string 0..9\n    (.open 0..1 '\"')\n    (.body 1..8 '👁️ ❤️ 🤓')\n    (.close 8..9 '\"')))"
   },
   {
+    "name": "Symbol with multi-byte character",
+    "input": "levels-σ",
+    "expected": "(source 0..8\n  (token 0..8 'levels-σ'))"
+  },
+  {
     "name": "Platform Reader Conditional",
     "input": "#?(:clj :clj\n   :cljr :cljr\n   :cljs :cljs)",
     "expected": "(source 0..43\n  (parens 0..43\n    (.open 0..3 '#?(')\n    (.body 3..42\n      (token 3..7 ':clj')\n      (token 8..12 ':clj')\n      (token 16..21 ':cljr')\n      (token 22..27 ':cljr')\n      (token 31..36 ':cljs')\n      (token 37..42 ':cljs'))\n    (.close 42..43 ')')))"
