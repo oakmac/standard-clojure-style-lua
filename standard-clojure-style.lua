@@ -464,15 +464,14 @@ end
 -- - children: array of child Nodes
 -- - name: name of the Node
 -- - text: raw text of the Node (only for terminal nodes like Regex or Strings)
-local function Node(opts)
+local function Node(startIdx, endIdx, name, text, children)
   local n = {}
-  n.children = opts.children
-  n.endIdx = opts.endIdx
+  n.startIdx = startIdx
+  n.endIdx = endIdx
+  n.name = name
+  n.text = text
+  n.children = children
   n.id = createId()
-  n.name = opts.name
-  n.startIdx = opts.startIdx
-  n.text = opts.text
-
   return n
 end
 
@@ -498,12 +497,7 @@ local function Named(opts)
       node.name = opts.name
       return node
     else
-      return Node({
-        children = { node },
-        endIdx = node.endIdx,
-        name = opts.name,
-        startIdx = node.startIdx,
-      })
+      return Node(node.startIdx, node.endIdx, opts.name, nil, { node })
     end
   end
 
@@ -519,12 +513,7 @@ local function AnyChar(opts)
   n.name = opts.name
   n.parse = function(txt, pos)
     if pos <= strLen(txt) then
-      return Node({
-        endIdx = pos + 1,
-        name = opts.name,
-        startIdx = pos,
-        text = charAt(txt, pos),
-      })
+      return Node(pos, pos + 1, opts.name, charAt(txt, pos), nil)
     else
       return nil
     end
@@ -540,12 +529,7 @@ local function Char(opts)
   n.name = opts.name
   n.parse = function(txt, pos)
     if pos <= strLen(txt) and charAt(txt, pos) == opts.char then
-      return Node({
-        endIdx = pos + 1,
-        name = opts.name,
-        startIdx = pos,
-        text = opts.char,
-      })
+      return Node(pos, pos + 1, opts.name, opts.char, nil)
     else
       return nil
     end
@@ -563,12 +547,7 @@ local function NotChar(opts)
       if pos <= strLen(txt) then
         local charAtThisPos = charAt(txt, pos)
         if charAtThisPos ~= opts.char then
-          return Node({
-            endIdx = pos + 1,
-            name = opts.name,
-            startIdx = pos,
-            text = charAtThisPos,
-          })
+          return Node(pos, pos + 1, opts.name, charAtThisPos, nil)
         end
       end
 
@@ -586,12 +565,7 @@ local function String(opts)
       if pos + len - 1 <= strLen(txt) then
         local strToCompare = substr(txt, pos, pos + len)
         if opts.str == strToCompare then
-          return Node({
-            endIdx = pos + len,
-            name = opts.name,
-            startIdx = pos,
-            text = opts.str,
-          })
+          return Node(pos, pos + len, opts.name, opts.str, nil)
         end
       end
       return nil
@@ -611,94 +585,12 @@ local function Pattern(opts)
       local matchResult = string.match(txt2, fullPattern)
 
       if type(matchResult) == "string" then
-        return Node({
-          endIdx = pos + strLen(matchResult),
-          name = name,
-          startIdx = pos,
-          text = matchResult,
-        })
+        return Node(pos, pos + strLen(matchResult), name, matchResult, nil)
       end
 
       return nil
     end,
   }
-end
-
--- Parses a body of a String character-by-character
-local function stringBodyParser_old(txt, pos)
-  local charIdx = pos
-  local endIdx = -1
-
-  while true do
-    local ch = charAt(txt, charIdx)
-
-    if not ch or ch == "" then
-      break
-    elseif ch == "\\" then
-      local nextChar = charAt(txt, charIdx + 1)
-      if type(nextChar) == "string" and nextChar ~= "" then
-        charIdx = charIdx + 1 -- skip the escaped char
-      else
-        return nil
-      end
-    elseif ch == '"' then
-      endIdx = charIdx
-      break
-    end
-
-    charIdx = charIdx + 1
-  end
-
-  if endIdx > 0 then
-    return Node({
-      endIdx = endIdx,
-      name = ".body",
-      startIdx = pos,
-      text = substr(txt, pos, endIdx),
-    })
-  end
-
-  return nil
-end
-
--- Parses a body of a String character-by-character
-local function stringBodyParser_old2(txt, pos)
-  local maxLength = strLen(txt)
-  if maxLength == 0 then
-    return nil
-  end
-
-  local charIdx = pos
-  local endIdx = -1
-
-  while charIdx <= maxLength do
-    local ch = charAt(txt, charIdx)
-    if not ch or ch == "" then
-      break
-    elseif ch == "\\" then
-      local nextChar = charAt(txt, charIdx + 1)
-      if type(nextChar) == "string" and nextChar ~= "" then
-        charIdx = charIdx + 1 -- skip the escaped char
-      else
-        return nil
-      end
-    elseif ch == '"' then
-      endIdx = charIdx
-      break
-    end
-    charIdx = charIdx + 1
-  end
-
-  if endIdx > 0 then
-    return Node({
-      endIdx = endIdx,
-      name = ".body",
-      startIdx = pos,
-      text = substr(txt, pos, endIdx),
-    })
-  end
-
-  return nil
 end
 
 -- Parses a body of a String jumping directly to escaped characters or quotes
@@ -749,12 +641,7 @@ local function stringBodyParser(txt, pos)
   end
 
   if endCharIdx > 0 then
-    return Node({
-      endIdx = endCharIdx,
-      name = ".body",
-      startIdx = pos,
-      text = txt:sub(startByte, bytePos - 1),
-    })
+    return Node(pos, endCharIdx, ".body", txt:sub(startByte, bytePos - 1), nil)
   end
 
   return nil
@@ -829,60 +716,6 @@ end
 
 local function isValidTokenTailChar(ch)
   return not whitespaceCharsTbl[ch] and not invalidTokenTailCharsTbl[ch]
-end
-
--- parses a Token character-by-character
-local function tokenParser_old(txt, pos)
-  local maxLength = strLen(txt)
-  if maxLength == 0 or pos > maxLength then
-    return nil
-  end
-
-  local charIdx = pos
-  local endIdx = -1
-  local keepSearching = true
-  local firstChar = true
-
-  -- Fast-forwarding "##" check
-  local firstTwoChars = substr(txt, pos, pos + 2)
-  if firstTwoChars == "##" then
-    charIdx = charIdx + 2
-  end
-
-  while keepSearching and charIdx <= maxLength do
-    local ch = charAt(txt, charIdx)
-    if not ch or ch == "" then
-      break
-    end
-
-    if firstChar then
-      if isValidTokenHeadChar(ch) then
-        endIdx = charIdx
-        firstChar = false
-      else
-        return nil
-      end
-    elseif isValidTokenTailChar(ch) then
-      endIdx = charIdx
-    else
-      keepSearching = false
-    end
-
-    if keepSearching then
-      charIdx = charIdx + 1
-    end
-  end
-
-  if endIdx > 0 then
-    return Node({
-      endIdx = endIdx + 1,
-      name = "token",
-      startIdx = pos,
-      text = substr(txt, pos, endIdx + 1),
-    })
-  end
-
-  return nil
 end
 
 local invalidTokenTailPattern = '[%s,%(%)%[%]{}"@%^;`]'
@@ -966,54 +799,11 @@ local function tokenParser(txt, pos)
   end
 
   if charIdx > pos then
-    return Node({
-      endIdx = charIdx,
-      name = "token",
-      startIdx = pos,
-      text = txt:sub(startByte, bytePos - 1),
-    })
+    return Node(pos, charIdx, "token", txt:sub(startByte, bytePos - 1), nil)
   end
 
   return nil
 end
-
--- local invalidTokenTailPattern = "[%s,%(%)%[%]{}\"@%^;`]"
-
--- -- parses a Token character-by-character
--- local function tokenParser(txt, pos)
---   local maxLength = #txt
---   if pos > maxLength then return nil end
-
---   local charIdx = pos
-
---   -- Fast-forwarding "##" check
---   if string.sub(txt, pos, pos + 1) == "##" then
---     charIdx = pos + 2
---   else
---     -- Check head using original function to safely support unicode
---     local headCh = charAt(txt, pos)
---     if not headCh or headCh == "" or not isValidTokenHeadChar(headCh) then
---       return nil
---     end
---     charIdx = pos + #headCh
---   end
-
---   -- Fast C-level search for the next invalid tail character
---   local nextInvalidPos = string.find(txt, invalidTokenTailPattern, charIdx)
-
---   local endIdx = nextInvalidPos and (nextInvalidPos - 1) or maxLength
-
---   if endIdx >= pos then
---     return Node({
---       endIdx = endIdx + 1,
---       name = "token",
---       startIdx = pos,
---       text = string.sub(txt, pos, endIdx),
---     })
---   end
-
---   return nil
--- end
 
 local specialCharsTbl = {
   ["("] = true,
@@ -1041,12 +831,7 @@ local function specialCharParser(txt, pos)
   if firstChar == "\\" then
     local secondChar = charAt(txt, pos + 1)
     if specialCharsTbl[secondChar] then
-      return Node({
-        endIdx = pos + 2,
-        name = "token",
-        startIdx = pos,
-        text = firstChar .. secondChar,
-      })
+      return Node(pos, pos + 2, "token", firstChar .. secondChar, nil)
     end
   end
 
@@ -1054,31 +839,6 @@ local function specialCharParser(txt, pos)
 end
 
 -- parses whitespace character-by-character
-local function whitespaceParser_working_old(txt, pos)
-  local charIdx = pos
-  local endIdx = -1
-
-  while true do
-    local ch = charAt(txt, charIdx)
-    if not ch or ch == "" or not whitespaceCharsTbl[ch] then
-      break
-    end
-    endIdx = charIdx
-    charIdx = charIdx + 1
-  end
-
-  if endIdx > 0 then
-    return Node({
-      endIdx = endIdx + 1,
-      name = "whitespace",
-      startIdx = pos,
-      text = substr(txt, pos, endIdx + 1),
-    })
-  end
-
-  return nil
-end
-
 local function whitespaceParser(txt, pos)
   local maxLength = strLen(txt)
   if maxLength == 0 then
@@ -1098,12 +858,7 @@ local function whitespaceParser(txt, pos)
   end
 
   if endIdx > 0 then
-    return Node({
-      endIdx = endIdx + 1,
-      name = "whitespace",
-      startIdx = pos,
-      text = substr(txt, pos, endIdx + 1),
-    })
+    return Node(pos, endIdx + 1, "whitespace", substr(txt, pos, endIdx + 1), nil)
   end
 
   return nil
@@ -1135,12 +890,7 @@ local function Seq(opts)
         idx = idx + 1
       end
 
-      return Node({
-        children = children,
-        endIdx = endIdx,
-        name = opts.name,
-        startIdx = pos,
-      })
+      return Node(pos, endIdx, opts.name, nil, children)
     end,
   }
 end
@@ -1209,12 +959,7 @@ local function Repeat(opts)
         name2 = opts.name
       end
       if #children >= minMatches then
-        return Node({
-          children = children,
-          endIdx = endIdx,
-          name = name2,
-          startIdx = pos,
-        })
+        return Node(pos, endIdx, name2, nil, children)
       end
       return nil
     end,
@@ -1229,7 +974,7 @@ local function Optional(parser)
       if node and type(node.text) == "string" and node.text ~= "" then
         return node
       else
-        return Node({ startIdx = pos, endIdx = pos })
+        return Node(pos, pos, nil, nil, nil)
       end
     end,
   }
