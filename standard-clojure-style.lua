@@ -347,34 +347,14 @@ local strLen = strLenUTF8
 local charAt = charAtUTF8
 local substr = substrUTF8
 
--- local cached_txt = nil
--- local cached_len = 0
-
--- local function memoizedStrLen(s)
---   if s == cached_txt then
---     return cached_len
---   end
---   cached_txt = s
-
---   if str_contains_multibyte_chars(s) then
---     cached_len = strLenUTF8(s)
---   else
---     cached_len = strLenASCII(s)
---   end
-
---   return cached_len
--- end
-
 local function set_appropriate_string_fns(txt)
-  -- Reset the cache for safety on new parse runs
-  -- cached_txt = nil
-  -- strLen = memoizedStrLen
-
   if str_contains_multibyte_chars(txt) then
+    file_contains_multibyte_chars = true
     strLen = strLenUTF8
     charAt = charAtUTF8
     substr = substrUTF8
   else
+    file_contains_multibyte_chars = false
     strLen = strLenASCII
     charAt = charAtASCII
     substr = substrASCII
@@ -527,30 +507,56 @@ local function Char(opts)
   n.isTerminal = true
   n.char = opts.char
   n.name = opts.name
+
+  local charByte = string.byte(opts.char) -- precompute once
+
   n.parse = function(txt, pos)
-    if pos <= strLen(txt) and charAt(txt, pos) == opts.char then
-      return Node(pos, pos + 1, opts.name, opts.char, nil)
-    else
+    if not file_contains_multibyte_chars then
+      if string.byte(txt, pos) == charByte then
+        return Node(
+          pos,
+          pos + 1,
+          opts.name,
+          opts.char, -- reuse the existing interned string
+          nil
+        )
+      end
       return nil
     end
+
+    -- UTF-8 fallback (original logic)
+    if pos <= strLen(txt) and charAt(txt, pos) == opts.char then
+      return Node(pos, pos + 1, opts.name, opts.char, nil)
+    end
+    return nil
   end
   return n
 end
 
 -- Terminal parser that matches any single character, except one.
 local function NotChar(opts)
+  local notByte = string.byte(opts.char)
+
   return {
     isTerminal = true,
     char = opts.char,
     name = opts.name,
     parse = function(txt, pos)
+      if not file_contains_multibyte_chars then
+        local b = string.byte(txt, pos)
+        if b and b ~= notByte then
+          return Node(pos, pos + 1, opts.name, string.char(b), nil)
+        end
+        return nil
+      end
+
+      -- UTF-8 fallback
       if pos <= strLen(txt) then
         local charAtThisPos = charAt(txt, pos)
         if charAtThisPos ~= opts.char then
           return Node(pos, pos + 1, opts.name, charAtThisPos, nil)
         end
       end
-
       return nil
     end,
   }
@@ -821,12 +827,29 @@ local specialCharsTbl = {
   [" "] = true,
 }
 
+local specialCharsByteTbl = {}
+for ch, _ in pairs(specialCharsTbl) do
+  if #ch == 1 then
+    specialCharsByteTbl[string.byte(ch)] = true
+  end
+end
+
 local function specialCharParser(txt, pos)
+  if not file_contains_multibyte_chars then
+    if string.byte(txt, pos) == 0x5C then -- backslash
+      local b2 = string.byte(txt, pos + 1)
+      if b2 and specialCharsByteTbl[b2] then
+        return Node(pos, pos + 2, "token", string.sub(txt, pos, pos + 1), nil)
+      end
+    end
+    return nil
+  end
+
+  -- UTF-8 fallback
   local maxLength = strLen(txt)
   if maxLength == 0 then
     return nil
   end
-
   local firstChar = charAt(txt, pos)
   if firstChar == "\\" then
     local secondChar = charAt(txt, pos + 1)
@@ -834,12 +857,48 @@ local function specialCharParser(txt, pos)
       return Node(pos, pos + 2, "token", firstChar .. secondChar, nil)
     end
   end
-
   return nil
 end
 
--- parses whitespace character-by-character
+-- Byte-value lookup table
+local whitespaceByteTbl = {
+  [0x20] = true, -- space
+  [0x2C] = true, -- comma
+  [0x0A] = true, -- \n
+  [0x0D] = true, -- \r
+  [0x09] = true, -- \t
+  [0x0C] = true, -- \f
+  [0x0B] = true, -- \v
+  [0x1C] = true,
+  [0x1D] = true,
+  [0x1E] = true,
+  [0x1F] = true,
+  -- Unicode whitespace chars (1680, 2000-200a, 2028, 2029, 205f, 3000)
+  -- are all multibyte, so they can't appear in ASCII-mode files.
+}
+
 local function whitespaceParser(txt, pos)
+  if not file_contains_multibyte_chars then
+    local b = string.byte(txt, pos)
+    if not whitespaceByteTbl[b] then
+      return nil
+    end
+
+    -- At least one whitespace char; scan forward
+    local endPos = pos + 1
+    local len = #txt
+    while endPos <= len do
+      b = string.byte(txt, endPos)
+      if not whitespaceByteTbl[b] then
+        break
+      end
+      endPos = endPos + 1
+    end
+
+    return Node(pos, endPos, "whitespace", string.sub(txt, pos, endPos - 1), nil)
+  end
+
+  -- UTF-8 fallback (original logic)
   local maxLength = strLen(txt)
   if maxLength == 0 then
     return nil
@@ -860,7 +919,6 @@ local function whitespaceParser(txt, pos)
   if endIdx > 0 then
     return Node(pos, endIdx + 1, "whitespace", substr(txt, pos, endIdx + 1), nil)
   end
-
   return nil
 end
 
