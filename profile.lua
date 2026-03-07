@@ -52,29 +52,29 @@ else
 end
 
 -- Number of iterations to get meaningful profiling data
-local iterations = 20
+local iterations = 10
 
 ------------------------------------------------------------------------
 -- Profile parse()
 ------------------------------------------------------------------------
-print("\n=== Profiling parse() ===")
-print("Running " .. iterations .. " iterations...\n")
+-- print("\n=== Profiling parse() ===")
+-- print("Running " .. iterations .. " iterations...\n")
 
-local parse_profiler = newProfiler("time")
-parse_profiler:start()
+-- local parse_profiler = newProfiler("time")
+-- parse_profiler:start()
 
-local parsed
-for i = 1, iterations do
-  parsed = scs.parse(input)
-  print(i)
-end
+-- local parsed
+-- for i = 1, iterations do
+--   parsed = scs.parse(input)
+--   print(i)
+-- end
 
-parse_profiler:stop()
+-- parse_profiler:stop()
 
-local parse_out = io.open("profile_parse.txt", "w+")
-parse_profiler:report(parse_out)
-parse_out:close()
-print("parse() profile written to profile_parse.txt")
+-- local parse_out = io.open("profile_parse.txt", "w+")
+-- parse_profiler:report(parse_out)
+-- parse_out:close()
+-- print("parse() profile written to profile_parse.txt")
 
 ------------------------------------------------------------------------
 -- Profile format()

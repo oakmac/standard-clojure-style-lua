@@ -80,15 +80,15 @@ end
 -- -----------------------------------------------------------------------------
 -- Language Helpers
 
--- returns the length of an Array
-local function arraySize(a)
-  return #a
-end
+-- -- returns the length of an Array
+-- local function arraySize(a)
+--   return #a
+-- end
 
 -- returns the last item in an Array
 -- returns nil if the Array has no items
 local function arrayLast(a)
-  local s = arraySize(a)
+  local s = #a
   if s == 0 then
     return nil
   else
@@ -97,7 +97,7 @@ local function arrayLast(a)
 end
 
 local function dropLast(arr)
-  local size = arraySize(arr)
+  local size = #arr
   local newArr = {}
   for i = 1, (size - 1) do
     newArr[i] = arr[i]
@@ -108,7 +108,7 @@ end
 -- given an array of objects, returns a new array of the values at obj[key]
 local function arrayPluck(arr, key)
   local arr2 = {}
-  local size = arraySize(arr)
+  local size = #arr
   local idx = 1
   while idx <= size do
     local itm = arr[idx]
@@ -120,7 +120,7 @@ end
 
 local function arrayReverse(arr)
   local newArr = {}
-  local size = arraySize(arr)
+  local size = #arr
   for i = size, 1, -1 do
     newArr[size - i + 1] = arr[i]
   end
@@ -168,7 +168,7 @@ end
 -- Stack Operations
 
 local function stackPeek(arr, idxFromBack)
-  local maxIdx = arraySize(arr) - 1
+  local maxIdx = #arr - 1
   if idxFromBack > maxIdx then
     return nil
   end
@@ -1121,7 +1121,7 @@ local function Seq(opts)
       local children = {}
       local endIdx = pos
       local idx = 1
-      local numParsers = arraySize(opts.parsers)
+      local numParsers = #opts.parsers
       while idx <= numParsers do
         local parser = opts.parsers[idx]
         local possibleNode = parser.parse(txt, endIdx)
@@ -1151,7 +1151,7 @@ local function Choice(opts)
 
   return {
     parse = function(txt, pos)
-      local numParsers = arraySize(opts.parsers)
+      local numParsers = #opts.parsers
 
       -- LAZY INIT: Resolve string to table ONCE per Choice instance
       if not resolved then
@@ -1208,7 +1208,7 @@ local function Repeat(opts)
       if type(opts.name) == "string" and endIdx > pos then
         name2 = opts.name
       end
-      if arraySize(children) >= minMatches then
+      if #children >= minMatches then
         return Node({
           children = children,
           endIdx = endIdx,
@@ -1243,7 +1243,7 @@ function appendChildren(childrenArr, node)
     table.insert(childrenArr, node)
   elseif isArray(node.children) then
     local idx = 1
-    local numChildren = arraySize(node.children)
+    local numChildren = #node.children
     while idx <= numChildren do
       local child = node.children[idx]
       if child then
@@ -1530,11 +1530,7 @@ local function isTagNode(n)
 end
 
 local function isStringNode(n)
-  return n
-    and n.name == "string"
-    and isArray(n.children)
-    and arraySize(n.children) == 3
-    and n.children[2].name == ".body"
+  return n and n.name == "string" and isArray(n.children) and #n.children == 3 and n.children[2].name == ".body"
 end
 
 local function getTextFromStringNode(n)
@@ -1597,7 +1593,7 @@ local function isOpeningBraceNode(n)
   return n
     and n.name == "braces"
     and isArray(n.children)
-    and arraySize(n.children) == 3
+    and #n.children == 3
     and n.children[3].name == ".close"
     and n.children[3].text == "}"
 end
@@ -1681,7 +1677,7 @@ end
 local function recurseAllChildren(node, f)
   f(node)
   if node.children then
-    local numChildren = arraySize(node.children)
+    local numChildren = #node.children
     local idx = 1
     while idx <= numChildren do
       local childNode = node.children[idx]
@@ -1731,7 +1727,7 @@ end
 -- searches forward to find the next node that has non-empty text
 -- returns the node if found, null otherwise
 local function findNextNodeWithText(allNodes, idx)
-  local maxIdx = arraySize(allNodes)
+  local maxIdx = #allNodes
   while idx <= maxIdx do
     local node = allNodes[idx]
     if type(node.text) == "string" and node.text ~= "" then
@@ -1745,7 +1741,7 @@ end
 -- searches forward to find the next node that can be the starting node of an ignore block
 -- returns the node if found, null otherwise
 local function findNextNonWhitespaceNode(allNodes, idx)
-  local maxIdx = arraySize(allNodes)
+  local maxIdx = #allNodes
   while idx <= maxIdx do
     local node = allNodes[idx]
     if not isWhitespaceNode(node) then
@@ -1787,7 +1783,7 @@ end
 -- and is located after specificNodeId
 -- returns the node if found, null otherwise
 function findNextNodeWithPredicateAfterSpecificNode(allNodes, startIdx, predFn, specificNodeId)
-  local maxIdx = arraySize(allNodes)
+  local maxIdx = #allNodes
   local keepSearching = true
   local idx = startIdx
   local afterSpecificNode = false
@@ -1826,7 +1822,7 @@ end
 
 -- Are all of the nodes on the next line already slurped up or whitespace nodes?
 function areForwardNodesAlreadySlurped(nodes, idx)
-  local nodesSize = arraySize(nodes)
+  local nodesSize = #nodes
   local result = true
   local keepSearching = true
   while keepSearching do
@@ -1869,7 +1865,7 @@ end
 -- returns an array of the nodes (possibly empty)
 function findForwardClosingParens(nodes, idx)
   local closers = {}
-  local nodesSize = arraySize(nodes)
+  local nodesSize = #nodes
   local keepSearching = true
   while keepSearching do
     local node = nodes[idx]
@@ -1909,7 +1905,7 @@ function recordOriginalColIndexes(nodes, idx)
   end
 
   local colIdx = initialSpaces
-  local numNodes = arraySize(nodes)
+  local numNodes = #nodes
   local keepSearching = true
   while keepSearching do
     local node = nodes[idx]
@@ -2095,7 +2091,7 @@ end
 -- FIXME: this will not work with metadata, comments, or reader conditionals
 local function findNextTokenInsideRequireForm(nodes, idx)
   local result = nil
-  local numNodes = arraySize(nodes)
+  local numNodes = #nodes
   local keepSearching = true
   while keepSearching do
     local node = nodes[idx]
@@ -2141,7 +2137,7 @@ local function sortNsResult(result, prefixListComments)
 
     -- sort :refer symbols
     local rmIdx = 0
-    local numRequireMacrosResults = arraySize(result.requireMacros)
+    local numRequireMacrosResults = #result.requireMacros
     while rmIdx < numRequireMacrosResults do
       if isArray(result.requireMacros[rmIdx + 1].refer) then
         table.sort(result.requireMacros[rmIdx + 1].refer, compareSymbolsThenPlatform)
@@ -2154,7 +2150,7 @@ local function sortNsResult(result, prefixListComments)
   if isArray(result.requires) then
     table.sort(result.requires, compareSymbolsThenPlatform)
 
-    local numRequires = arraySize(result.requires)
+    local numRequires = #result.requires
     local requiresIdx = 1
     while requiresIdx <= numRequires do
       local req = result.requires[requiresIdx]
@@ -2226,7 +2222,7 @@ local function sortNsResult(result, prefixListComments)
 
   -- merge nsMetadata keys
   if isArray(result.nsMetadata) then
-    local numMetadataItms = arraySize(result.nsMetadata)
+    local numMetadataItms = #result.nsMetadata
     if numMetadataItms > 1 then
       local metadataObj = {}
       local metadataKeys = {}
@@ -2239,7 +2235,7 @@ local function sortNsResult(result, prefixListComments)
       end
 
       local newNsMetadata = {}
-      local reverseIdx = arraySize(metadataKeys) - 1
+      local reverseIdx = #metadataKeys - 1
       while reverseIdx >= 0 do
         local key2 = metadataKeys[reverseIdx + 1]
 
@@ -2266,7 +2262,7 @@ end
 -- stopping when we reach the first (ns) form
 local function lookForIgnoreFile(nodesArr)
   local keepSearching = true
-  local numNodes = arraySize(nodesArr)
+  local numNodes = #nodesArr
   local idx = 1
   while keepSearching do
     local node = nodesArr[idx]
@@ -2301,7 +2297,7 @@ end
 -- TODO: this function should accept a string and parse it into a flat node array
 local function parseNs(nodesArr)
   local idx = 1
-  local numNodes = arraySize(nodesArr)
+  local numNodes = #nodesArr
   local result = {
     nsSymbol = nil,
   }
@@ -2739,17 +2735,17 @@ local function parseNs(nodesArr)
       end
 
     -- attach comments to the :require form
-    elseif insideRequireForm and idx == requireNodeIdx and arraySize(singleLineComments) > 0 then
+    elseif insideRequireForm and idx == requireNodeIdx and #singleLineComments > 0 then
       result.requireCommentsAbove = singleLineComments
       singleLineComments = {}
 
     -- attach comments to the :import form
-    elseif insideImportForm and idx == importNodeIdx and arraySize(singleLineComments) > 0 then
+    elseif insideImportForm and idx == importNodeIdx and #singleLineComments > 0 then
       result.importCommentsAbove = singleLineComments
       singleLineComments = {}
 
     -- attach comments to the :refer-clojure form
-    elseif insideReferClojureForm and idx == referClojureNodeIdx and arraySize(singleLineComments) > 0 then
+    elseif insideReferClojureForm and idx == referClojureNodeIdx and #singleLineComments > 0 then
       result.referClojureCommentsAbove = singleLineComments
       singleLineComments = {}
 
@@ -2843,7 +2839,7 @@ local function parseNs(nodesArr)
     then
       stackPush(renamesTmp, node.text)
 
-      if arraySize(renamesTmp) == 2 then
+      if #renamesTmp == 2 then
         local itm = {}
         itm.fromSymbol = renamesTmp[1]
         itm.toSymbol = renamesTmp[2]
@@ -2912,7 +2908,7 @@ local function parseNs(nodesArr)
 
       stackPush(renamesTmp, node.text)
 
-      if arraySize(renamesTmp) == 2 then
+      if #renamesTmp == 2 then
         local itm = {}
         itm.fromSymbol = renamesTmp[1]
         itm.toSymbol = renamesTmp[2]
@@ -2942,7 +2938,7 @@ local function parseNs(nodesArr)
         result.requireMacros = {}
 
         -- add commentsAbove to the :require-macros form if possible
-        if arraySize(singleLineComments) > 0 then
+        if #singleLineComments > 0 then
           result.requireMacrosCommentsAbove = singleLineComments
           singleLineComments = {}
         end
@@ -2953,7 +2949,7 @@ local function parseNs(nodesArr)
       }
 
       -- store the comments above this line
-      if arraySize(singleLineComments) > 0 then
+      if #singleLineComments > 0 then
         reqObj.commentsAbove = singleLineComments
         singleLineComments = {}
       end
@@ -3063,7 +3059,7 @@ local function parseNs(nodesArr)
     then
       stackPush(renamesTmp, node.text)
 
-      if arraySize(renamesTmp) == 2 then
+      if #renamesTmp == 2 then
         local itm = {}
         itm.fromSymbol = renamesTmp[1]
         itm.toSymbol = renamesTmp[2]
@@ -3123,7 +3119,7 @@ local function parseNs(nodesArr)
       requireFormLineNo = lineNo
 
       -- attach comments from the lines above this require
-      if arraySize(singleLineComments) > 0 then
+      if #singleLineComments > 0 then
         result.requires[activeRequireIdx].commentsAbove = singleLineComments
         singleLineComments = {}
       end
@@ -3191,7 +3187,7 @@ local function parseNs(nodesArr)
 
         -- store the comments above this line
         -- we will attach them to the first ns imported by this prefix list later
-        if arraySize(singleLineComments) > 0 then
+        if #singleLineComments > 0 then
           local itm = {
             commentsAbove = singleLineComments,
           }
@@ -3214,7 +3210,7 @@ local function parseNs(nodesArr)
         prefixListLineNo = -1
 
         -- attach comments from the lines above this require
-        if arraySize(singleLineComments) > 0 then
+        if #singleLineComments > 0 then
           result.requires[activeRequireIdx].commentsAbove = singleLineComments
           singleLineComments = {}
         end
@@ -3241,7 +3237,7 @@ local function parseNs(nodesArr)
       requireFormLineNo = lineNo
 
       -- attach comments from the lines above this require
-      if arraySize(singleLineComments) > 0 then
+      if #singleLineComments > 0 then
         result.requires[activeRequireIdx].commentsAbove = singleLineComments
         singleLineComments = {}
       end
@@ -3274,7 +3270,7 @@ local function parseNs(nodesArr)
       activeImportPackageName = packageName
       importFormLineNo = lineNo
 
-      if arraySize(singleLineComments) > 0 then
+      if #singleLineComments > 0 then
         result.importsObj[packageName].commentsAbove = singleLineComments
         singleLineComments = {}
       end
@@ -3302,7 +3298,7 @@ local function parseNs(nodesArr)
           }
         end
 
-        if arraySize(singleLineComments) > 0 then
+        if #singleLineComments > 0 then
           result.importsObj[packageName].commentsAbove = singleLineComments
           singleLineComments = {}
         end
@@ -3343,7 +3339,7 @@ local function parseNs(nodesArr)
       end
 
       -- add commentsAbove
-      if arraySize(singleLineComments) > 0 then
+      if #singleLineComments > 0 then
         result.genClass.commentsAbove = singleLineComments
         singleLineComments = {}
       end
@@ -3364,7 +3360,7 @@ local function parseNs(nodesArr)
       result.genClass[genClassKeyStr] = {}
 
       -- add commentsAbove if possible
-      if arraySize(singleLineComments) > 0 then
+      if #singleLineComments > 0 then
         result.genClass[genClassKeyStr].commentsAbove = singleLineComments
         singleLineComments = {}
       end
@@ -3447,7 +3443,7 @@ end
 local function printCommentsAbove(outTxt, commentsAbove, indentationStr)
   local txtChunks = { outTxt }
   if isArray(commentsAbove) then
-    local numCommentLines = arraySize(commentsAbove)
+    local numCommentLines = #commentsAbove
     local idx = 1
     while idx <= numCommentLines do
       txtChunks[#txtChunks + 1] = indentationStr .. commentsAbove[idx] .. "\n"
@@ -3461,7 +3457,7 @@ end
 local function getPlatformsFromArray(arr)
   local hasDefault = false
   local platforms = {}
-  local numItms = arraySize(arr)
+  local numItms = #arr
   local idx = 1
   while idx <= numItms do
     local itm = arr[idx]
@@ -3494,7 +3490,7 @@ end
 -- the splicing reader conditional #?@(
 local function onlyOneRequirePerPlatform(reqs)
   local platformCounts = {}
-  local numReqs = arraySize(reqs)
+  local numReqs = #reqs
   local idx = 0
   local keepSearching = true
   local result = true
@@ -3522,7 +3518,7 @@ end
 function filterOnPlatform(arr, platform)
   local filteredReqs = {}
   local idx = 0
-  local numReqs = arraySize(arr)
+  local numReqs = #arr
   while idx < numReqs do
     local itm = arr[idx + 1]
     if platform == false and not itm.platform then
@@ -3559,7 +3555,7 @@ function formatRequireLine(req, initialIndentation)
   end
 
   -- NOTE: this will not work if the individual :refer symbols are wrapped in a reader conditional
-  if isArray(req.refer) and arraySize(req.refer) > 0 then
+  if isArray(req.refer) and #req.refer > 0 then
     table.insert(parts, " :refer [")
     local referSymbols = arrayPluck(req.refer, "symbol")
     table.insert(parts, strJoin(referSymbols, " "))
@@ -3569,7 +3565,7 @@ function formatRequireLine(req, initialIndentation)
   end
 
   -- NOTE: this will not work if the individual :exclude symbols are wrapped in a reader conditional
-  if isArray(req.exclude) and arraySize(req.exclude) > 0 then
+  if isArray(req.exclude) and #req.exclude > 0 then
     table.insert(parts, " :exclude [")
     local excludeSymbols = arrayPluck(req.exclude, "symbol")
     table.insert(parts, strJoin(excludeSymbols, " "))
@@ -3582,13 +3578,13 @@ function formatRequireLine(req, initialIndentation)
     table.insert(parts, " :include-macros false")
   end
 
-  if isArray(req.referMacros) and arraySize(req.referMacros) > 0 then
+  if isArray(req.referMacros) and #req.referMacros > 0 then
     table.insert(parts, " :refer-macros [")
     table.insert(parts, strJoin(req.referMacros, " "))
     table.insert(parts, "]")
   end
 
-  if isArray(req.rename) and arraySize(req.rename) > 0 then
+  if isArray(req.rename) and #req.rename > 0 then
     table.insert(parts, " :rename {")
     table.insert(parts, formatRenamesList(req.rename))
     table.insert(parts, "}")
@@ -3630,7 +3626,7 @@ end
 
 function formatRenamesList(itms)
   local parts = {}
-  local numItms = arraySize(itms)
+  local numItms = #itms
   local idx = 0
 
   while idx < numItms do
@@ -3652,9 +3648,9 @@ local function formatReferClojureSingleKeyword(ns, excludeOrOnly)
   local symbolsArr = ns.referClojure[excludeOrOnly]
   local kwd = ":" .. excludeOrOnly -- standard Lua concat is faster here
   local platforms = getPlatformsFromArray(symbolsArr)
-  local numPlatforms = arraySize(platforms)
+  local numPlatforms = #platforms
   local symbolsForAllPlatforms = arrayPluck(filterOnPlatform(symbolsArr, false), "symbol")
-  local numSymbolsForAllPlatforms = arraySize(symbolsForAllPlatforms)
+  local numSymbolsForAllPlatforms = #symbolsForAllPlatforms
 
   local parts = {}
 
@@ -3765,7 +3761,7 @@ end
 
 local function formatReferClojure(ns)
   local keys = getReferClojureKeys(ns.referClojure)
-  local numKeys = arraySize(keys)
+  local numKeys = #keys
 
   -- there are no :refer-clojure items, we are done
   if numKeys == 0 then
@@ -3782,10 +3778,10 @@ local function formatReferClojure(ns)
   -- there is only :rename
   elseif numKeys == 1 and keys[1] == ":rename" then
     local platforms = getPlatformsFromArray(ns.referClojure.rename)
-    local numPlatforms = arraySize(platforms)
+    local numPlatforms = #platforms
     local nonPlatformSpecificRenames = filterOnPlatform(ns.referClojure.rename, false)
-    local numNonPlatformSpecificRenames = arraySize(nonPlatformSpecificRenames)
-    local allRenamesForSamePlatform = numNonPlatformSpecificRenames == 0 and arraySize(platforms) > 0
+    local numNonPlatformSpecificRenames = #nonPlatformSpecificRenames
+    local allRenamesForSamePlatform = numNonPlatformSpecificRenames == 0 and #platforms > 0
 
     if numPlatforms == 0 then
       local parts = {}
@@ -3839,19 +3835,19 @@ local function formatReferClojure(ns)
     local parts = {}
     table.insert(parts, "\n  (:refer-clojure")
 
-    if ns.referClojure.exclude and arraySize(ns.referClojure.exclude) > 0 then
+    if ns.referClojure.exclude and #ns.referClojure.exclude > 0 then
       local excludeSymbols = arrayPluck(ns.referClojure.exclude, "symbol")
       table.insert(parts, "\n    ")
       table.insert(parts, formatKeywordFollowedByListOfSymbols(":exclude", excludeSymbols))
     end
 
-    if ns.referClojure.only and arraySize(ns.referClojure.only) > 0 then
+    if ns.referClojure.only and #ns.referClojure.only > 0 then
       local onlySymbols = arrayPluck(ns.referClojure.only, "symbol")
       table.insert(parts, "\n    ")
       table.insert(parts, formatKeywordFollowedByListOfSymbols(":only", onlySymbols))
     end
 
-    if ns.referClojure.rename and arraySize(ns.referClojure.rename) > 0 then
+    if ns.referClojure.rename and #ns.referClojure.rename > 0 then
       table.insert(parts, "\n    :rename {")
       table.insert(parts, formatRenamesList(ns.referClojure.rename))
       table.insert(parts, "}")
@@ -3870,17 +3866,17 @@ local function formatNs(ns)
 
   local numRequireMacros = 0
   if isArray(ns.requireMacros) then
-    numRequireMacros = arraySize(ns.requireMacros)
+    numRequireMacros = #ns.requireMacros
   end
 
   local numRequires = 0
   if isArray(ns.requires) then
-    numRequires = arraySize(ns.requires)
+    numRequires = #ns.requires
   end
 
   local numImports = 0
   if isArray(ns.imports) then
-    numImports = arraySize(ns.imports)
+    numImports = #ns.imports
   end
 
   local commentOutsideNsForm2 = nil
@@ -3902,7 +3898,7 @@ local function formatNs(ns)
   end
 
   if isArray(ns.nsMetadata) then
-    local numMetadataItms = arraySize(ns.nsMetadata)
+    local numMetadataItms = #ns.nsMetadata
     if numMetadataItms > 0 then
       local metadataItmsIdx = 0
       txtChunks[#txtChunks + 1] = "\n  {"
@@ -3936,7 +3932,7 @@ local function formatNs(ns)
 
   if numRequireMacros > 0 then
     local cljsPlatformRequireMacros = filterOnPlatform(ns.requireMacros, ":cljs")
-    local wrapRequireMacrosWithReaderConditional = arraySize(cljsPlatformRequireMacros) == numRequireMacros
+    local wrapRequireMacrosWithReaderConditional = #cljsPlatformRequireMacros == numRequireMacros
     local rmLastLineCommentAfter = nil
 
     local rmIndentation = "   "
@@ -3995,12 +3991,12 @@ local function formatNs(ns)
     local lastRequireHasComment = false
     local lastRequireComment = nil
     local reqPlatforms = getPlatformsFromArray(ns.requires)
-    local numPlatforms = arraySize(reqPlatforms)
+    local numPlatforms = #reqPlatforms
 
     local allRequiresUnderOnePlatform = false
     if numPlatforms == 1 then
       local onePlatformRequires = filterOnPlatform(ns.requires, reqPlatforms[1])
-      if numRequires == arraySize(onePlatformRequires) then
+      if numRequires == #onePlatformRequires then
         allRequiresUnderOnePlatform = true
       end
     end
@@ -4010,7 +4006,7 @@ local function formatNs(ns)
       txtChunks[#txtChunks + 1] = "\n  #?("
       txtChunks[#txtChunks + 1] = reqPlatforms[1]
 
-      if isArray(ns.requireCommentsAbove) and arraySize(ns.requireCommentsAbove) > 0 then
+      if isArray(ns.requireCommentsAbove) and #ns.requireCommentsAbove > 0 then
         txtChunks[#txtChunks + 1] = "\n     "
         txtChunks[#txtChunks + 1] = strJoin(ns.requireCommentsAbove, "\n     ")
       end
@@ -4024,7 +4020,7 @@ local function formatNs(ns)
 
       requireLineIndentation = "      "
     else
-      if isArray(ns.requireCommentsAbove) and arraySize(ns.requireCommentsAbove) > 0 then
+      if isArray(ns.requireCommentsAbove) and #ns.requireCommentsAbove > 0 then
         txtChunks[#txtChunks + 1] = "\n  "
         txtChunks[#txtChunks + 1] = strJoin(ns.requireCommentsAbove, "\n  ")
       end
@@ -4108,7 +4104,7 @@ local function formatNs(ns)
 
           -- only look at requires for this platform
           local platformRequires = filterOnPlatform(ns.requires, platform)
-          local numFilteredReqs = arraySize(platformRequires)
+          local numFilteredReqs = #platformRequires
           local printedFirstReqLine = false
           local printPlatformClosingBracket = true
           local reqIdx2 = 0
@@ -4177,9 +4173,9 @@ local function formatNs(ns)
 
   if numImports > 0 then
     local nonPlatformSpecificImports = filterOnPlatform(ns.imports, false)
-    local numNonPlatformSpecificImports = arraySize(nonPlatformSpecificImports)
+    local numNonPlatformSpecificImports = #nonPlatformSpecificImports
     local importPlatforms = getPlatformsFromArray(ns.imports)
-    local numImportPlatforms = arraySize(importPlatforms)
+    local numImportPlatforms = #importPlatforms
 
     local lastImportLineCommentAfter = nil
     local isImportKeywordPrinted = false
@@ -4197,7 +4193,7 @@ local function formatNs(ns)
       txtChunks[#txtChunks + 1] = "   ("
       txtChunks[#txtChunks + 1] = imp.package
 
-      local numClasses = arraySize(imp.classes)
+      local numClasses = #imp.classes
       local classNameIdx = 0
       while classNameIdx < numClasses do
         local className = imp.classes[classNameIdx + 1]
@@ -4250,7 +4246,7 @@ local function formatNs(ns)
 
       local importsForThisPlatform = filterOnPlatform(ns.imports, platformStr)
       local idx2 = 0
-      local numImports2 = arraySize(importsForThisPlatform)
+      local numImports2 = #importsForThisPlatform
       while idx2 < numImports2 do
         local imp = importsForThisPlatform[idx2 + 1]
         local isLastImport2 = (idx2 + 1) == numImports2
@@ -4331,7 +4327,7 @@ local function formatNs(ns)
       local indentationStr2 = repeatString(" ", genClassValueIndentationLevel)
 
       local idx3 = 1
-      local numGenClassKeys = arraySize(genClassKeys)
+      local numGenClassKeys = #genClassKeys
       while idx3 <= numGenClassKeys do
         local genClassKey = genClassKeys[idx3]
         local genClassValue = ns.genClass[genClassKey]
@@ -4348,7 +4344,7 @@ local function formatNs(ns)
           txtChunks[#txtChunks + 1] = genClassKey
 
           if genClassKey == "implements" then
-            local numInterfaces = arraySize(genClassValue)
+            local numInterfaces = #genClassValue
             local interfaceIdx = 0
             while interfaceIdx < numInterfaces do
               if interfaceIdx == 0 then
@@ -4409,7 +4405,7 @@ end
 -- Continuation of the format() function, with the input text parsed into nodes
 -- and ns form parsed.
 local function formatNodes(nodesArr, parsedNs)
-  local numNodes = arraySize(nodesArr)
+  local numNodes = #nodesArr
   local hasParsedNsForm = not not parsedNs.nsSymbol
 
   local parenNestingDepth = 0
@@ -4492,7 +4488,7 @@ local function formatNodes(nodesArr, parsedNs)
           local nextIgnoreNode = findNextNonWhitespaceNode(nodesArr, idx + 1)
 
           -- if parens or brackets or something with children, then find the closing node id
-          if isArray(nextIgnoreNode.children) and arraySize(nextIgnoreNode.children) > 0 then
+          if isArray(nextIgnoreNode.children) and #nextIgnoreNode.children > 0 then
             local closingNode = arrayLast(nextIgnoreNode.children)
             ignoreNodesStartId = nextIgnoreNode.id
             ignoreNodesEndId = closingNode.id
@@ -4514,7 +4510,7 @@ local function formatNodes(nodesArr, parsedNs)
             findNextNodeWithPredicateAfterSpecificNode(nodesArr, idx, alwaysTrue, startIgnoreNode.id)
 
           -- if parens or brackets or something with children, then find the closing node id
-          if isArray(firstNodeInsideIgnoreZone.children) and arraySize(firstNodeInsideIgnoreZone.children) > 0 then
+          if isArray(firstNodeInsideIgnoreZone.children) and #firstNodeInsideIgnoreZone.children > 0 then
             local closingNode = arrayLast(firstNodeInsideIgnoreZone.children)
             ignoreNodesStartId = startIgnoreNode.id
             ignoreNodesEndId = closingNode.id
@@ -4598,7 +4594,7 @@ local function formatNodes(nodesArr, parsedNs)
       -- If we are inside of a parenStack and hit a newline,
       -- look forward to see if we can close the current parenTrail.
       -- ie: slurp closing parens onto the current line
-      local parenStackSize = arraySize(parenStack)
+      local parenStackSize = #parenStack
       if parenStackSize > 0 and not insideNsForm then
         local isCommentFollowedByNewline = isCommentNode(node) and nextTextNode and isNewlineNode(nextTextNode)
         local isNewline = isNewlineNode(node)
@@ -4627,7 +4623,7 @@ local function formatNodes(nodesArr, parsedNs)
           end
 
           local parenTrailCloserIdx = 1
-          local numParenTrailClosers = arraySize(parenTrailClosers)
+          local numParenTrailClosers = #parenTrailClosers
 
           while parenTrailCloserIdx <= numParenTrailClosers do
             local parenTrailCloserNode = parenTrailClosers[parenTrailCloserIdx]
@@ -4690,7 +4686,7 @@ local function formatNodes(nodesArr, parsedNs)
             -- we must be past the first whitespace node in order to look for Rule 3 alignment nodes
             local pastFirstWhitespaceNode = false
 
-            local numOpeningLineNodes = arraySize(topOfTheParenStack._openingLineNodes)
+            local numOpeningLineNodes = #topOfTheParenStack._openingLineNodes
             if numOpeningLineNodes > 2 then
               while searchForAlignmentNode do
                 local openingLineNode = topOfTheParenStack._openingLineNodes[openingLineNodeIdx]
@@ -4734,7 +4730,7 @@ local function formatNodes(nodesArr, parsedNs)
           local commentLooksAlignedWithPreviousForm = false
           if nextLineContainsOnlyOneComment then
             local idx2 = 1
-            local numPrevLineNodes = arraySize(nodesWeHavePrintedOnThisLine)
+            local numPrevLineNodes = #nodesWeHavePrintedOnThisLine
             while idx2 <= numPrevLineNodes do
               local prevLineNode = nodesWeHavePrintedOnThisLine[idx2]
               local prevNode2 = nil
